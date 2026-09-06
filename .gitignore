@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+zsh/.zshrc.local
+*.swp
+*.tmp
+__pycache__/
+*.pyc

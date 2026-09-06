@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Create new pash script
+
+name=${1:-}
+
+if [ $# -eq 0 ]; then
+	echo "Provide a name for script"
+	read -r name
+fi
+
+cd "${SCRIPTS:?SCRIPTS must point to your scripts directory}"
+
+if [[ -e "$name" ]]; then
+	echo "Refusing to overwrite existing file: $name" >&2
+	exit 1
+fi
+
+touch "$name"
+chmod +x "$name"
+cat > "$name" <<EOF
+#!/bin/bash
+
+echo "Running: $name"
+EOF

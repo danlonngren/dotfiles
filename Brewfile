@@ -1,0 +1,11 @@
+# Core command-line tools used by this configuration.
+brew "bat"
+brew "fzf"
+brew "neovim"
+brew "ripgrep"
+brew "shellcheck"
+brew "shfmt"
+brew "tmux"
+brew "tmuxinator"
+brew "zsh-autosuggestions"
+brew "zsh-syntax-highlighting"

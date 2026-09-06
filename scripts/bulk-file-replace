@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if (($# < 2 || $# > 3)); then
+  echo "Usage: $(basename "$0") <old-name> <new-name> [directory]" >&2
+  exit 1
+fi
+
+old=$1
+new=$2
+root=${3:-.}
+
+if [[ ! -d "$root" ]]; then
+  echo "Directory not found: $root" >&2
+  exit 1
+fi
+
+found=false
+
+while IFS= read -r -d '' path; do
+	found=true
+	newpath="${path//$old/$new}"
+	mv "$path" "$newpath"
+done < <(find "$root" -depth -name "*$old*" -print0)
+
+if $found; then
+	echo "Changed '$old' with '$new'"
+fi

@@ -1,0 +1,12 @@
+name: dotfiles
+root: <%= ENV.fetch('DOTFILES', File.expand_path('~/dotfiles')) %>
+
+windows:
+  - config:
+      layout: main-vertical
+      panes:
+        - nvim
+        - git status
+  - shell:
+      panes:
+        -

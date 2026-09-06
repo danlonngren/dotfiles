@@ -1,0 +1,2 @@
+# Python dependencies for scripts/ssh-helper.
+asyncssh>=2.14,<3

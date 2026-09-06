@@ -1,0 +1,4 @@
+
+# Display git branch in terminal
+PROMPT='%n@%m %1~ $(git branch --show-current 2>/dev/null) %# '
+

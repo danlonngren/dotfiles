@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Replaces all : with newline in path and echos it
+
+printf '%s' "$PATH" | tr ':' '\n'
