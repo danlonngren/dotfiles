@@ -48,7 +48,14 @@ if [[ ! -f "$file" ]]; then
     exit 1
 fi
 
-copy_bind='enter:execute-silent(printf "%s" {} | pbcopy)'
+copy_bind=()
+if command -v pbcopy >/dev/null 2>&1; then
+    copy_bind=(--bind 'enter:execute-silent(printf "%s" {} | pbcopy)')
+elif command -v wl-copy >/dev/null 2>&1; then
+    copy_bind=(--bind 'enter:execute-silent(printf "%s" {} | wl-copy)')
+elif command -v xclip >/dev/null 2>&1; then
+    copy_bind=(--bind 'enter:execute-silent(printf "%s" {} | xclip -selection clipboard)')
+fi
 
 if $live; then
     tail -F "$file" |
@@ -57,7 +64,7 @@ if $live; then
             "$wrap" \
             --no-sort \
             --tail 10000 \
-            --bind "$copy_bind"
+            "${copy_bind[@]}"
 
 elif $use_rg; then
     export LOGVIEW_FILE="$file"
@@ -69,14 +76,14 @@ elif $use_rg; then
         --ansi \
         --bind 'start:reload:rg --no-heading --color=always "" "$LOGVIEW_FILE"' \
         --bind 'change:reload:rg --no-heading --color=always -- {q} "$LOGVIEW_FILE" || true' \
-        --bind "$copy_bind"
+        "${copy_bind[@]}"
 
 else
     fzf \
         --tac \
         "$wrap" \
         --no-sort \
-        --bind "$copy_bind" < "$file"
+        "${copy_bind[@]}" < "$file"
 fi
 
 
@@ -243,4 +250,3 @@ logview --live app.log
 Uses `tail -F` and keeps the latest **10,000 lines** available in `fzf`.
 
 `--rg` is not used in live mode.
-

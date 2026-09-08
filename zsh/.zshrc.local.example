@@ -1,6 +1,0 @@
-# Machine-specific variables, private aliases, and tokens belong in
-# ~/.zshrc.local, which is not committed to this repository.
-
-# export WORK_API_TOKEN="replace-me"
-# export WORK_REPOS="$HOME/work"
-# alias vpn="your-private-vpn-command"

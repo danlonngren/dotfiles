@@ -19,6 +19,23 @@ Your shell derives `DOTFILES` and `SCRIPTS` from the installed `.zshrc`
 symlink, so the repository may be cloned anywhere. The scripts are both added
 to `PATH` and available at `$SCRIPTS`.
 
+## Application configuration
+
+The repository tracks Neovim's portable configuration in `config/nvim/`,
+including `init.vim` and LSP settings. Installed plugins, state, logs, and
+caches are intentionally excluded.
+
+If `~/.config/nvim` already exists as a directory, preserve it before running
+the installer so it can create the symlink:
+
+```sh
+mv ~/.config/nvim ~/.config/nvim.backup
+./install.sh
+```
+
+Review the backup before deleting it. Add other application configurations only
+when they are authored settings, not generated state or credentials.
+
 ## Requirements
 
 - Zsh and [Oh My Zsh](https://ohmyz.sh/)
@@ -43,26 +60,27 @@ tmuxinator start work
 
 ## Dependencies and checks
 
-Install the core command-line dependencies listed in `Brewfile` with:
+`./install.sh` installs the core command-line dependencies for its platform:
+Homebrew and the `Brewfile` on macOS, or APT on Ubuntu. Other Linux
+distributions use the `Brewfile` when Homebrew is installed.
+
+To install the dependencies separately on macOS or another Homebrew-supported
+platform, run:
 
 ```sh
 brew bundle --file Brewfile
 ```
 
-Run the same local checks used by GitHub Actions with:
+To install the Ubuntu dependencies separately, run:
 
 ```sh
-make check
+./scripts/install-ubuntu-dependencies
 ```
 
-The checks validate Bash and Zsh syntax, validate the Python helper, run
-ShellCheck, and verify Bash formatting with shfmt.
-
-`scripts/ssh-helper` needs its Python dependency when you use it:
-
-```sh
-python3 -m pip install -r requirements.txt
-```
+The installer enables the `universe` repository when needed and installs the
+full package set, including Zsh and its plugins. Ubuntu names the `bat` command
+`batcat`; this configuration detects it automatically. Install `wl-clipboard`
+(Wayland) or `xclip` (X11) if you want `logview`'s Enter-to-copy binding.
 
 ## Local settings
 

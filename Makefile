@@ -1,4 +1,4 @@
-BASH_FILES := install.sh scripts/bulk-file-replace scripts/bulkreplace scripts/newpyscript scripts/newscript scripts/path
+BASH_FILES := install.sh scripts/bulk-file-replace scripts/bulkreplace scripts/install-ubuntu-dependencies scripts/newpyscript scripts/newscript scripts/path
 ZSH_FILES := zsh/.zshrc scripts/fzf-git scripts/logview
 
 .PHONY: check syntax

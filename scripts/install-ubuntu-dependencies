@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ ! -r /etc/os-release ]] || ! grep -qx 'ID=ubuntu' /etc/os-release; then
+	printf 'This installer supports Ubuntu only.\n' >&2
+	exit 1
+fi
+
+if ((EUID == 0)); then
+	privileged=()
+else
+	if ! command -v sudo >/dev/null 2>&1; then
+		printf 'Run this script as root, or install sudo first.\n' >&2
+		exit 1
+	fi
+	privileged=(sudo)
+fi
+
+apt=("${privileged[@]}" apt-get)
+
+if ! command -v add-apt-repository >/dev/null 2>&1; then
+	"${apt[@]}" update
+	"${apt[@]}" install --yes software-properties-common
+fi
+
+"${privileged[@]}" add-apt-repository --yes universe
+"${apt[@]}" update
+"${apt[@]}" install --yes \
+	bat \
+	fzf \
+	neovim \
+	ripgrep \
+	shellcheck \
+	shfmt \
+	tmux \
+	tmuxinator \
+	zsh \
+	zsh-autosuggestions \
+	zsh-syntax-highlighting

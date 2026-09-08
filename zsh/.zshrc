@@ -1,54 +1,58 @@
-# ============================================================
-# ZSH Configuration
-# ============================================================
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
 
-# Resolve this repository from the .zshrc symlink, so it can be cloned anywhere.
-typeset _dotfiles_zshrc="${${(%):-%N}:A}"
-export DOTFILES="${DOTFILES:-${_dotfiles_zshrc:h:h}}"
-export SCRIPTS="${SCRIPTS:-$DOTFILES/scripts}"
-unset _dotfiles_zshrc
+if [[ -f "/opt/homebrew/bin/brew" ]] then
+  # If you're using macOS, you'll want this enabled
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
 
-# ------------------------------------------------------------
-# Homebrew / PATH
-# ------------------------------------------------------------
+# Set the directory we want to store zinit and plugins
+ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 
-export PATH="/opt/homebrew/bin:$PATH"
+# Download Zinit, if it's not there yet
+if [ ! -d "$ZINIT_HOME" ]; then
+   mkdir -p "$(dirname $ZINIT_HOME)"
+   git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+fi
 
-path=(
-  /opt/homebrew/opt/llvm/bin
-  "$HOME/bin"
-  "$HOME/.local/bin"
-  "$HOME/dotnet"
-  "$SCRIPTS"
-  $path
-)
+# Install tmux tpm package manager
+TMUX_TPM="$HOME/.tmux/plugins/tpm"
+if [ ! -d "$TMUX_TPM" ]; then
+    mkdir -p "$TMUX_TPM"
+    git clone https://github.com/tmux-plugins/tpm "$TMUX_TPM"
+fi
 
-[[ -d /home/vscode/.local/bin ]] && path+=(/home/vscode/.local/bin)
-[[ -d /root/.local/bin ]] && path+=(/root/.local/bin)
+# Source/Load zinit
+source "${ZINIT_HOME}/zinit.zsh"
 
-typeset -U path
-export PATH
+# Add in Powerlevel10k
+zinit ice depth=1; zinit light romkatv/powerlevel10k
 
+# Add in zsh plugins
+zinit light zsh-users/zsh-syntax-highlighting
+zinit light zsh-users/zsh-completions
+zinit light zsh-users/zsh-autosuggestions
+zinit light Aloxaf/fzf-tab
+# zinit light catppuccin/tmux
 
-# ------------------------------------------------------------
-# Oh My Zsh
-# ------------------------------------------------------------
+# Add in snippets
+zinit snippet OMZL::git.zsh
+zinit snippet OMZP::git
+zinit snippet OMZP::sudo
+zinit snippet OMZP::archlinux
+zinit snippet OMZP::aws
+zinit snippet OMZP::kubectl
+zinit snippet OMZP::kubectx
+zinit snippet OMZP::command-not-found
 
-export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
+# Load completions
+autoload -Uz compinit && compinit
 
-ZSH_THEME="robbyrussell"
-
-plugins=(
-  git
-  docker
-  extract
-)
-
-# Disable async Git prompt if branch info fails to render
-zstyle ':omz:alpha:lib:git' async-prompt false
-
-[[ -r "$ZSH/oh-my-zsh.sh" ]] && source "$ZSH/oh-my-zsh.sh"
-
+zinit cdreplay -q
 
 # ------------------------------------------------------------
 # Shell behaviour
@@ -60,119 +64,11 @@ export VISUAL="nvim"
 export EDITOR="nvim"
 export BROWSER="firefox"
 
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-# ------------------------------------------------------------
-# Directories
-# ------------------------------------------------------------
-
-export REPOS="$HOME/git"
-export GITUSER="danlonngren"
-export GHREPOS="$REPOS/github.com/$GITUSER"
-export ICLOUD="$HOME/icloud"
-
-
-# ------------------------------------------------------------
-# Go
-# ------------------------------------------------------------
-
-export GOPATH="$HOME/go"
-export GOBIN="$HOME/.local/bin"
-export GOPRIVATE="github.com/$GITUSER/*,gitlab.com/$GITUSER/*"
-
-
-# ------------------------------------------------------------
-# Build flags
-# ------------------------------------------------------------
-
-export LDFLAGS="-L/opt/homebrew/opt/expat/lib"
-export CPPFLAGS="-I/opt/homebrew/opt/expat/include"
-export DYLD_LIBRARY_PATH="/opt/homebrew/opt/expat/lib"
-
-
-# ------------------------------------------------------------
-# History
-# ------------------------------------------------------------
-
-HISTFILE="$HOME/.zsh_history"
-HISTSIZE=100000
-SAVEHIST=100000
-
-setopt HIST_IGNORE_SPACE
-setopt HIST_IGNORE_DUPS
-setopt HIST_REDUCE_BLANKS
-setopt SHARE_HISTORY
-setopt APPEND_HISTORY
-setopt INC_APPEND_HISTORY
-
-
-# ------------------------------------------------------------
-# General aliases
-# ------------------------------------------------------------
-
-alias v="nvim"
-alias c="clear"
-alias e="exit"
-alias tm="tmux"
-
-alias refresh="exec zsh"
-alias vrc="nvim ~/.zshrc"
-
-alias home='cd "$HOME"'
-
-alias scripts='cd "$SCRIPTS"'
-alias icloud='cd "$ICLOUD"'
-
-alias repos='cd "$REPOS"'
-alias ghrepos='cd "$GHREPOS"'
-alias gr='cd "$GHREPOS"'
-alias cdgo='cd "$GHREPOS/go"'
-
-
-# ------------------------------------------------------------
-# Personal shortcuts
-# ------------------------------------------------------------
-
-alias 0='cd "$HOME/0"'
-alias zo='eval "$("$SCRIPTS/0-cd")"'
-
-
-# ------------------------------------------------------------
-# ls
-# ------------------------------------------------------------
-
-alias ls="ls -G"
-alias la="ls -lathr"
-
-alias lastmod='find . -type f -not -path "*/.*" -exec ls -lrt {} +'
-
-
-# ------------------------------------------------------------
-# Git aliases
-# ------------------------------------------------------------
-
-alias gp="git pull"
-alias gs="git status"
-alias lg="lazygit"
-
-
-# ------------------------------------------------------------
-# Pipeline status
-# ------------------------------------------------------------
-
-alias pstatus='echo "${pipestatus[*]}"'
-
-
-# ------------------------------------------------------------
-# Completion
-# ------------------------------------------------------------
-
-autoload -Uz compinit
-compinit
-
-
-# ------------------------------------------------------------
-# History navigation
-# ------------------------------------------------------------
+# Final keybindings
+bindkey -e
 
 autoload -Uz up-line-or-beginning-search
 autoload -Uz down-line-or-beginning-search
@@ -183,89 +79,44 @@ zle -N down-line-or-beginning-search
 bindkey '^[[A' up-line-or-beginning-search
 bindkey '^[[B' down-line-or-beginning-search
 
+# Some terminals (and tmux) send application-cursor sequences for arrow keys.
+# Bind those variants too so prefix history search works consistently.
+bindkey '^[OA' up-line-or-beginning-search
+bindkey '^[OB' down-line-or-beginning-search
 
-# ------------------------------------------------------------
-# fzf
-# ------------------------------------------------------------
+bindkey '^[[C' forward-char
+bindkey '^[[D' backward-char
 
-if command -v fzf >/dev/null 2>&1; then
-  source <(fzf --zsh)
+# History
+HISTSIZE=5000
+HISTFILE=~/.zsh_history
+SAVEHIST=$HISTSIZE
+HISTDUP=erase
+setopt appendhistory
+setopt sharehistory
+setopt hist_ignore_space
+setopt hist_ignore_all_dups
+setopt hist_save_no_dups
+setopt hist_ignore_dups
+setopt hist_find_no_dups
 
-  alias fzf-preview="rg --files | fzf --preview 'bat --color=always --style=numbers {}'"
-fi
+# Completion styling
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*' menu no
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls --color $realpath'
+zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'ls --color $realpath'
 
+# Aliases
+alias ls='ls --color'
+alias vim='nvim'
+alias c='clear'
 
-# ------------------------------------------------------------
-# External plugins
-# ------------------------------------------------------------
+# Shell integrations
+eval "$(fzf --zsh)"
+eval "$(zoxide init --cmd cd zsh)"
 
-if command -v brew >/dev/null 2>&1; then
-  ZSH_AUTOSUGGESTIONS="$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-  ZSH_SYNTAX_HIGHLIGHTING="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-
-  [[ -f "$ZSH_AUTOSUGGESTIONS" ]] && source "$ZSH_AUTOSUGGESTIONS"
-  [[ -f "$ZSH_SYNTAX_HIGHLIGHTING" ]] && source "$ZSH_SYNTAX_HIGHLIGHTING"
-fi
-
-
-# ------------------------------------------------------------
-# Custom scripts
-# ------------------------------------------------------------
-
+# Source files
+[[ -r "$HOME/.zshrc-paths" ]] && source "$HOME/.zshrc-paths"
+[[ -r "$HOME/.zshrc-aliases" ]] && source "$HOME/.zshrc-aliases"
 [[ -r "$SCRIPTS/fzf-git" ]] && source "$SCRIPTS/fzf-git"
-
-# ------------------------------------------------------------
-# General fzf helpers
-# ------------------------------------------------------------
-
-ff() {
-  local file
-
-  file=$(
-    rg --files |
-      fzf \
-        --prompt="File > " \
-        --preview='bat --color=always --style=numbers {} 2>/dev/null'
-  ) || return
-
-  nvim "$file"
-}
-
-
-fdc() {
-  local dir
-
-  dir=$(
-    find . -type d -not -path '*/.git/*' 2>/dev/null |
-      fzf --prompt="Directory > "
-  ) || return
-
-  cd "$dir"
-}
-
-
-
-# ------------------------------------------------------------
-# Show current git branch in shell
-# ------------------------------------------------------------
-git_branch() {
-  git symbolic-ref --short HEAD 2>/dev/null
-}
-
-setopt PROMPT_SUBST
-PROMPT='%F{green}➜%f  %F{cyan}%1~%f $(b=$(git_branch); [[ -n "$b" ]] && echo "%F{blue}git:($b)%f ")'
-
-# ------------------------------------------------------------
-# NVM
-# ------------------------------------------------------------
-
-export NVM_DIR="$HOME/.nvm"
-
-# Keep machine-specific settings and secrets out of version control.
-[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
-
-[[ -s "$NVM_DIR/nvm.sh" ]] &&
-  source "$NVM_DIR/nvm.sh"
-
-[[ -s "$NVM_DIR/bash_completion" ]] &&
-  source "$NVM_DIR/bash_completion"

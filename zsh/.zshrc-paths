@@ -1,0 +1,33 @@
+# ------------------------------------------------------------
+# Directories
+# ------------------------------------------------------------
+
+# Github
+export GITUSER="danlonngren"
+export GHREPOS="$REPOS/github.com/$GITUSER"
+
+# Local paths
+export REPOS="$HOME/git"
+export ICLOUD="$HOME/icloud"
+export SCRIPTS="$HOME/scripts"
+
+# ------------------------------------------------------------
+# PATH and platform tools
+# ------------------------------------------------------------
+
+path=(
+  "$HOME/bin"
+  "$HOME/.local/bin"
+  "$HOME/dotnet"
+  "$SCRIPTS"
+  $path
+)
+
+if command -v brew >/dev/null 2>&1; then
+  llvm_bin="$(brew --prefix llvm 2>/dev/null)/bin"
+  [[ -d "$llvm_bin" ]] && path=("$llvm_bin" $path)
+  unset llvm_bin
+fi
+
+typeset -U path
+export PATH

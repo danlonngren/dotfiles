@@ -39,7 +39,7 @@ gf() {
     git ls-files |
       fzf \
         --prompt="File > " \
-        --preview='bat --color=always --style=numbers {} 2>/dev/null'
+        --preview="${FZF_PREVIEW_COMMAND:-sed -n '1,160p'} {} 2>/dev/null"
   ) || return
 
   print -r -- "$file"
@@ -52,7 +52,7 @@ gv() {
     git ls-files |
       fzf \
         --prompt="Edit > " \
-        --preview='bat --color=always --style=numbers {} 2>/dev/null'
+        --preview="${FZF_PREVIEW_COMMAND:-sed -n '1,160p'} {} 2>/dev/null"
   ) || return
 
   nvim "$file"
@@ -70,5 +70,4 @@ gl() {
 
   git show "${commit%% *}"
 }
-
 
