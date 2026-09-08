@@ -48,6 +48,7 @@ mkdir -p "$HOME/.config/tmux"
 link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
 link_path "$repo_dir/zsh/.zshrc-paths" "$HOME/.zshrc-paths"
 link_path "$repo_dir/zsh/.zshrc-aliases" "$HOME/.zshrc-aliases"
+link_path "$repo_dir/bash/.bashrc" "$HOME/.bashrc"
 
 link_path "$repo_dir/tmux/tmux.conf" "$HOME/.config/tmux/tmux.conf"
 link_path "$repo_dir/nvim" "$HOME/.config/nvim"

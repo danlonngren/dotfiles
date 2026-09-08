@@ -120,3 +120,5 @@ eval "$(zoxide init --cmd cd zsh)"
 [[ -r "$HOME/.zshrc-paths" ]] && source "$HOME/.zshrc-paths"
 [[ -r "$HOME/.zshrc-aliases" ]] && source "$HOME/.zshrc-aliases"
 [[ -r "$SCRIPTS/fzf-git" ]] && source "$SCRIPTS/fzf-git"
+
+[[ -r "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"

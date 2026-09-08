@@ -1,89 +1,75 @@
 # Dotfiles
 
-Portable Zsh and tmux configuration, including an automatically saved terminal
-workspace.
+Zsh, tmux, Neovim, tmuxinator, and small terminal utilities for a personal development environment.
 
 ## Install
 
-Clone this repository anywhere, then run:
+Clone the repository, then run:
 
 ```sh
 ./install.sh
 ```
 
-The installer derives the repository location from itself and creates symlinks
-for `.zshrc`, `.tmux.conf`, `~/scripts`, and the `work` tmuxinator project. It
-will not replace an existing non-symlink path; move or back it up first.
+The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
 
-Your shell derives `DOTFILES` and `SCRIPTS` from the installed `.zshrc`
-symlink, so the repository may be cloned anywhere. The scripts are both added
-to `PATH` and available at `$SCRIPTS`.
+### Dependencies
 
-## Application configuration
-
-The repository tracks Neovim's portable configuration in `config/nvim/`,
-including `init.vim` and LSP settings. Installed plugins, state, logs, and
-caches are intentionally excluded.
-
-If `~/.config/nvim` already exists as a directory, preserve it before running
-the installer so it can create the symlink:
-
-```sh
-mv ~/.config/nvim ~/.config/nvim.backup
-./install.sh
-```
-
-Review the backup before deleting it. Add other application configurations only
-when they are authored settings, not generated state or credentials.
-
-## Requirements
-
-- Zsh and [Oh My Zsh](https://ohmyz.sh/)
-- tmux
-- [TPM](https://github.com/tmux-plugins/tpm), installed with:
-
-  ```sh
-  git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-  ```
-
-Start tmux and press `prefix` then `I` (normally `Ctrl-b`, then `I`) to install
-the configured plugins. `tmux-resurrect` saves sessions, panes, layouts, and
-working directories; `tmux-continuum` saves every 15 minutes and restores the
-latest workspace when tmux starts. You can also save with `prefix` + `Ctrl-s`
-and restore with `prefix` + `Ctrl-r`.
-
-Install `tmuxinator` if you want a repeatable starter layout, then run:
-
-```sh
-tmuxinator start work
-```
-
-## Dependencies and checks
-
-`./install.sh` installs the core command-line dependencies for its platform:
-Homebrew and the `Brewfile` on macOS, or APT on Ubuntu. Other Linux
-distributions use the `Brewfile` when Homebrew is installed.
-
-To install the dependencies separately on macOS or another Homebrew-supported
-platform, run:
+On macOS, Homebrew is required and the installer runs:
 
 ```sh
 brew bundle --file Brewfile
 ```
 
-To install the Ubuntu dependencies separately, run:
+On Ubuntu, it enables `universe` and runs `scripts/install-ubuntu-dependencies`. Other Linux distributions require Homebrew. Run either dependency setup separately with:
 
 ```sh
+brew bundle --file Brewfile
+# or, on Ubuntu
 ./scripts/install-ubuntu-dependencies
 ```
 
-The installer enables the `universe` repository when needed and installs the
-full package set, including Zsh and its plugins. Ubuntu names the `bat` command
-`batcat`; this configuration detects it automatically. Install `wl-clipboard`
-(Wayland) or `xclip` (X11) if you want `logview`'s Enter-to-copy binding.
+Zsh initializes both `fzf` and `zoxide`. The Brewfile installs them; install `zoxide` separately when using the Ubuntu installer. `git` is also required for Zinit and TPM checkouts.
 
-## Local settings
+## Zsh
 
-Put machine-specific values, tokens, and private aliases in `~/.zshrc.local`.
-It is sourced after this configuration and is deliberately not tracked here.
-Use `zsh/.zshrc.local.example` as a starting point.
+The main configuration loads Zinit from `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`) and uses it for Powerlevel10k, completions, syntax highlighting, autosuggestions, and fzf-tab. The first shell startup checks out Zinit if it is absent.
+
+`~/.zshrc-paths` sets the repository locations and adds `~/scripts` to `PATH`. `~/.zshrc-aliases` contains aliases, the prompt, and fzf helpers. The `ff`, `fdc`, `gf`, `gv`, `gb`, `gt`, and `gl` helpers use fzf; previews use `bat` when available and fall back to `sed` (`batcat` is supported on Ubuntu).
+
+## Bash
+
+`bash/.bashrc` is a dependency-light alternative for machines without Zsh. It provides the same directory variables, `PATH` entries, common aliases, Git prompt, fzf helpers, Git pickers, and fzf/zoxide shell integrations. It is active only in interactive shells and optionally sources `~/.bashrc.local` for machine-specific settings.
+
+## tmux and tmuxinator
+
+tmux uses `Ctrl-Space` as its prefix, Vim-style pane navigation, mouse support, and pane splits that inherit the current working directory. It uses TPM for `tmux-sensible`, `vim-tmux-navigator`, `catppuccin-tmux`, and `tmux-yank`.
+
+Install TPM, start tmux, then press `prefix` followed by `I` to install the configured plugins:
+
+```sh
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+```
+
+Two tmuxinator layouts are included:
+
+```sh
+tmuxinator start dotfiles
+tmuxinator start work
+```
+
+`dotfiles` defaults to `~/dotfiles` unless `DOTFILES` is set; `work` defaults to `~/git` unless `REPOS` is set.
+
+## Neovim
+
+The Neovim configuration uses vim-plug. Install vim-plug before opening Neovim with this configuration, then run `:PlugInstall`. It configures UI settings, NERDTree, Fugitive, nvim-cmp, LuaSnip, and `nvim-lspconfig`.
+
+LSP support requires Neovim 0.11 or later and language servers on `PATH`:
+
+- `clangd` for C and C++
+- `basedpyright-langserver` for Python
+
+The Python LSP definition is in `nvim/lsp/basedpyright.lua`.
+
+## Scripts
+
+The installed `~/scripts` directory contains `fzf-git` (Git pickers), `logview` (browse, regex-search, or follow a log), `newscript`, `newpyscript`, and `path`. `logview` copies the selected line with Enter when `pbcopy`, `wl-copy`, or `xclip` is available.
