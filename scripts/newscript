@@ -20,7 +20,7 @@ fi
 
 touch "$name"
 chmod +x "$name"
-cat > "$name" <<EOF
+cat >"$name" <<EOF
 #!/bin/bash
 
 echo "Running: $name"

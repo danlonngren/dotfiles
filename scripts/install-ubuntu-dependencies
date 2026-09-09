@@ -29,6 +29,7 @@ fi
 "${apt[@]}" install --yes \
 	bat \
 	fzf \
+	git \
 	neovim \
 	ripgrep \
 	shellcheck \

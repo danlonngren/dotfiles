@@ -21,7 +21,7 @@ fi
 touch "$name"
 chmod +x "$name"
 
-cat > "$name" <<EOF
+cat >"$name" <<EOF
 #!/usr/bin/env python3
 
 print("Running: $name")

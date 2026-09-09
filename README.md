@@ -10,7 +10,7 @@ Clone the repository, then run:
 ./install.sh
 ```
 
-The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
+The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.shellrc-common`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
 
 ### Dependencies
 
@@ -28,17 +28,19 @@ brew bundle --file Brewfile
 ./scripts/install-ubuntu-dependencies
 ```
 
-Zsh initializes both `fzf` and `zoxide`. The Brewfile installs them; install `zoxide` separately when using the Ubuntu installer. `git` is also required for Zinit and TPM checkouts.
+Zsh initializes `fzf` and `zoxide` only when they are available. The Brewfile installs both; install `zoxide` separately when using the Ubuntu installer. `git` is installed by both platform installers and is required for the Zinit checkout.
 
 ## Zsh
 
-The main configuration loads Zinit from `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`) and uses it for Powerlevel10k, completions, syntax highlighting, autosuggestions, and fzf-tab. The first shell startup checks out Zinit if it is absent.
+The installer checks out Zinit to `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`). The main configuration loads it for Powerlevel10k, completions, syntax highlighting, autosuggestions, and fzf-tab; shell startup never performs a network checkout.
 
-`~/.zshrc-paths` sets the repository locations and adds `~/scripts` to `PATH`. `~/.zshrc-aliases` contains aliases, the prompt, and fzf helpers. The `ff`, `fdc`, `gf`, `gv`, `gb`, `gt`, and `gl` helpers use fzf; previews use `bat` when available and fall back to `sed` (`batcat` is supported on Ubuntu).
+`~/.zshrc-paths` sets the repository locations and adds `~/scripts` to `PATH`. `~/.shellrc-common` contains shared aliases and fzf helpers for both shells; the shell-specific alias files retain only shell-specific behavior. The `ff`, `fdc`, `gf`, `gv`, `gb`, `gt`, and `gl` helpers use fzf; previews use `bat` when available and fall back to `sed` (`batcat` is supported on Ubuntu). `~/scripts/fzf-git` remains as a compatibility loader for older configurations.
 
 ## Bash
 
-`bash/.bashrc` is a dependency-light alternative for machines without Zsh. It provides the same directory variables, `PATH` entries, common aliases, Git prompt, fzf helpers, Git pickers, and fzf/zoxide shell integrations. It is active only in interactive shells and optionally sources `~/.bashrc.local` for machine-specific settings.
+`bash/.bashrc` is a dependency-light alternative for machines without Zsh. It provides the same directory variables, `PATH` entries, common aliases, Git prompt, fzf helpers, Git pickers, and fzf/zoxide shell integrations. It is active only in interactive shells and optionally sources `~/.bashrc-local` for machine-specific settings.
+
+Optional integrations are guarded: a missing tool never prevents shell startup, and an fzf helper reports the missing command when invoked.
 
 ## tmux and tmuxinator
 

@@ -1,0 +1,103 @@
+# Shared Bash and Zsh configuration.
+
+alias v='nvim'
+alias c='clear'
+alias e='exit'
+alias tm='tmux'
+
+alias home='cd "$HOME"'
+alias dotscripts='cd "$DOTSCRIPTS"'
+alias icloud='cd "$ICLOUD"'
+alias repos='cd "$REPOS"'
+alias ghrepos='cd "$GHREPOS"'
+alias gr='cd "$GHREPOS"'
+
+alias gp='git pull'
+alias gs='git status'
+alias lg='lazygit'
+
+if [[ "${OSTYPE:-}" == darwin* ]]; then
+	alias ls='ls -G'
+else
+	alias ls='ls --color=auto'
+fi
+alias la='ls -lathr'
+alias lastmod='find . -type f -not -path "*/.*" -exec ls -lrt {} +'
+
+__dotfiles_require() {
+	local tool
+
+	for tool in "$@"; do
+		if ! command -v "$tool" >/dev/null 2>&1; then
+			printf 'This command requires %s, but it is not installed or not on PATH.\n' "$tool" >&2
+			return 1
+		fi
+	done
+}
+
+if command -v bat >/dev/null 2>&1; then
+	export FZF_PREVIEW_COMMAND='bat --color=always --style=numbers'
+elif command -v batcat >/dev/null 2>&1; then
+	export FZF_PREVIEW_COMMAND='batcat --color=always --style=numbers'
+else
+	export FZF_PREVIEW_COMMAND='sed -n "1,160p"'
+fi
+
+ff() {
+	local file
+
+	__dotfiles_require rg fzf nvim || return
+	file=$(rg --files | fzf --prompt='File > ' --preview="$FZF_PREVIEW_COMMAND {} 2>/dev/null") || return
+	nvim "$file"
+}
+
+fdc() {
+	local dir
+
+	__dotfiles_require fzf || return
+	dir=$(find . -type d -not -path '*/.git/*' 2>/dev/null | fzf --prompt='Directory > ') || return
+	cd "$dir" || return
+}
+
+# Oh My Zsh's Git snippet may define these as aliases.
+unalias gb gt gf gv gl 2>/dev/null
+
+gb() {
+	local branch
+
+	__dotfiles_require git fzf || return
+	branch=$(git branch --all --format='%(refname:short)' | sed 's#^origin/##' | grep -v 'HEAD' | sort -u | fzf --prompt='Branch > ' --preview='git log --oneline --graph --color=always -20 {}') || return
+	git switch "$branch" 2>/dev/null || git switch --track "origin/$branch"
+}
+
+gt() {
+	local tag
+
+	__dotfiles_require git fzf || return
+	tag=$(git tag --sort=-creatordate | fzf --prompt='Tag > ' --preview='git show --color=always {}') || return
+	git checkout "$tag"
+}
+
+gf() {
+	local file
+
+	__dotfiles_require git fzf || return
+	file=$(git ls-files | fzf --prompt='File > ' --preview="${FZF_PREVIEW_COMMAND} {} 2>/dev/null") || return
+	printf '%s\n' "$file"
+}
+
+gv() {
+	local file
+
+	__dotfiles_require git fzf nvim || return
+	file=$(git ls-files | fzf --prompt='Edit > ' --preview="${FZF_PREVIEW_COMMAND} {} 2>/dev/null") || return
+	nvim "$file"
+}
+
+gl() {
+	local commit
+
+	__dotfiles_require git fzf || return
+	commit=$(git log --oneline | fzf --prompt='Commit > ' --preview='git show --color=always {1}') || return
+	git show "${commit%% *}"
+}

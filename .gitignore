@@ -3,7 +3,8 @@
 .env
 .env.*
 !.env.example
-zsh/.zshrc.local
+zsh/.zshrc-local
+bash/.bashrc-local
 *.swp
 *.tmp
 __pycache__/

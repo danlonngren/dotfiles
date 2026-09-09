@@ -27,14 +27,7 @@ install_dependencies() {
 		brew bundle --file "$repo_dir/Brewfile"
 		;;
 	Linux)
-		if [[ -r /etc/os-release ]] && grep -qx 'ID=ubuntu' /etc/os-release; then
-			"$repo_dir/scripts/install-ubuntu-dependencies"
-		elif command -v brew >/dev/null 2>&1; then
-			brew bundle --file "$repo_dir/Brewfile"
-		else
-			printf 'Unsupported Linux distribution. Use Ubuntu or install Homebrew first.\n' >&2
-			return 1
-		fi
+		"$repo_dir/scripts/install-ubuntu-dependencies"
 		;;
 	*)
 		printf 'Unsupported operating system: %s\n' "$(uname -s)" >&2
@@ -43,12 +36,39 @@ install_dependencies() {
 	esac
 }
 
+install_zinit() {
+	local zinit_home="${XDG_DATA_HOME:-$HOME/.local/share}/zinit/zinit.git"
+
+	if ! command -v git >/dev/null 2>&1; then
+		printf 'Cannot install Zinit: git is required but was not found on PATH.\n' >&2
+		return 1
+	fi
+
+	if [[ -r "$zinit_home/zinit.zsh" ]]; then
+		printf 'Zinit is already installed at %s\n' "$zinit_home"
+		return
+	fi
+
+	if [[ -e "$zinit_home" ]]; then
+		printf 'Cannot install Zinit: %s exists but is not a valid Zinit checkout. Move it aside, then run this script again.\n' "$zinit_home" >&2
+		return 1
+	fi
+
+	mkdir -p "$(dirname "$zinit_home")"
+	git clone --depth=1 https://github.com/zdharma-continuum/zinit.git "$zinit_home"
+}
+
 mkdir -p "$HOME/.config/tmux"
 
+# zshrc
 link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
 link_path "$repo_dir/zsh/.zshrc-paths" "$HOME/.zshrc-paths"
 link_path "$repo_dir/zsh/.zshrc-aliases" "$HOME/.zshrc-aliases"
+link_path "$repo_dir/shell/.shellrc-common" "$HOME/.shellrc-common"
+
+# Bashrc
 link_path "$repo_dir/bash/.bashrc" "$HOME/.bashrc"
+link_path "$repo_dir/bash/.bashrc-aliases" "$HOME/.bashrc-aliases"
 
 link_path "$repo_dir/tmux/tmux.conf" "$HOME/.config/tmux/tmux.conf"
 link_path "$repo_dir/nvim" "$HOME/.config/nvim"
@@ -61,6 +81,7 @@ for project_file in "$repo_dir"/tmuxinator/*.yml; do
 done
 
 install_dependencies
+install_zinit
 
 printf '\nInstall tmux plugins with prefix + I after starting tmux.\n'
 

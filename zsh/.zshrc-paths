@@ -2,14 +2,12 @@
 # Directories
 # ------------------------------------------------------------
 
-# Github
-export GITUSER="danlonngren"
-export GHREPOS="$REPOS/github.com/$GITUSER"
-
 # Local paths
+export GITUSER="$USER"
 export REPOS="$HOME/git"
+export GHREPOS="$REPOS/github.com/$GITUSER"
 export ICLOUD="$HOME/icloud"
-export SCRIPTS="$HOME/scripts"
+export DOTSCRIPTS="$HOME/scripts"
 
 # ------------------------------------------------------------
 # PATH and platform tools
@@ -19,7 +17,7 @@ path=(
   "$HOME/bin"
   "$HOME/.local/bin"
   "$HOME/dotnet"
-  "$SCRIPTS"
+  "$DOTSCRIPTS"
   $path
 )
 
