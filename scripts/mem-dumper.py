@@ -265,14 +265,18 @@ if [ "$include_process_stats" = "1" ]; then
     swap=${4:--}
     name=$(tr '\t\r\n' '   ' < "$proc/comm" 2>/dev/null)
     command=$(tr '\000\t\r\n' '    ' < "$proc/cmdline" 2>/dev/null)
-    cpu_values=$(sed 's/^.*) //' "$proc/stat" 2>/dev/null | \
-        awk '{print $12+$13, $20}')
-    set -- $cpu_values
-    cpu_ticks=${1:--}
-    start_ticks=${2:--}
-    printf 'P\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$pid" "$rss" "$pss" "$uss" "$swap" "$cpu_ticks" \
-        "$start_ticks" "$name" "$command"
+    stat_values=$(sed 's/^.*) //' "$proc/stat" 2>/dev/null | \
+        awk '{print $2, $12+$13, $20}')
+    set -- $stat_values
+    ppid=${1:--}
+    cpu_ticks=${2:--}
+    start_ticks=${3:--}
+    threads=$(awk '$1 == "Threads:" {print $2}' "$proc/status" 2>/dev/null)
+    [ -n "$threads" ] || threads=-
+    executable=$(readlink "$proc/exe" 2>/dev/null | tr '\t\r\n' '   ')
+    printf 'P\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$pid" "$ppid" "$rss" "$pss" "$uss" "$swap" "$cpu_ticks" \
+        "$start_ticks" "$threads" "$name" "$executable" "$command"
 done
 fi
 ''')
@@ -366,21 +370,50 @@ def parse_memory_record(fields: List[str]) -> Dict[str, Optional[int]]:
     return {name: parse_number(value) for name, value in zip(names, fields[1:])}
 
 
+def detect_process_type(
+    name: str,
+    executable: str,
+    command: str,
+) -> Tuple[str, str]:
+    """Use explicit process metadata without guessing an internal role."""
+    arguments = command.split()
+    for index, argument in enumerate(arguments):
+        if argument.startswith("--type="):
+            return argument.split("=", 1)[1], "cmdline"
+        if argument == "--type" and index + 1 < len(arguments):
+            return arguments[index + 1], "cmdline"
+
+    if executable:
+        return executable.rsplit("/", 1)[-1], "executable"
+    if name:
+        return name, "comm"
+    return "unknown", "unavailable"
+
+
 def parse_process_record(fields: List[str]) -> ProcessStats:
-    """Parse one per-process record."""
-    if len(fields) < 10:
+    """Parse one process and attach its factual type and source."""
+    if len(fields) < 13:
         raise RuntimeError("invalid process record from target")
+    name = fields[10] or "?"
+    executable = fields[11]
+    command = "\t".join(fields[12:]).strip()
+    process_type, type_source = detect_process_type(name, executable, command)
     return {
         "pid": int(fields[1]),
-        "rss_bytes": parse_number(fields[2], 1024),
-        "pss_bytes": parse_number(fields[3], 1024),
-        "uss_bytes": parse_number(fields[4], 1024),
-        "swap_bytes": parse_number(fields[5], 1024),
-        "cpu_ticks": parse_number(fields[6]),
-        "start_ticks": parse_number(fields[7]),
+        "ppid": parse_number(fields[2]),
+        "rss_bytes": parse_number(fields[3], 1024),
+        "pss_bytes": parse_number(fields[4], 1024),
+        "uss_bytes": parse_number(fields[5], 1024),
+        "swap_bytes": parse_number(fields[6], 1024),
+        "cpu_ticks": parse_number(fields[7]),
+        "start_ticks": parse_number(fields[8]),
+        "threads": parse_number(fields[9]),
         "cpu_percent": None,
-        "name": fields[8] or "?",
-        "command": "\t".join(fields[9:]).strip(),
+        "name": name,
+        "executable": executable,
+        "command": command,
+        "type": process_type,
+        "type_source": type_source,
     }
 
 
@@ -567,6 +600,33 @@ def display_memory_breakdown(sample: Sample) -> None:
     )
 
 
+def process_tree_order(
+    processes: List[ProcessStats],
+) -> List[Tuple[int, ProcessStats]]:
+    """Return processes in parent-first order with their tree depth."""
+    by_pid = {process["pid"]: process for process in processes}
+    children = {}  # type: Dict[int, List[ProcessStats]]
+    roots = []  # type: List[ProcessStats]
+
+    for process in processes:
+        parent = process.get("ppid")
+        if parent in by_pid:
+            children.setdefault(parent, []).append(process)
+        else:
+            roots.append(process)
+
+    ordered = []  # type: List[Tuple[int, ProcessStats]]
+
+    def visit(process: ProcessStats, depth: int) -> None:
+        ordered.append((depth, process))
+        for child in sorted(children.get(process["pid"], []), key=lambda item: item["pid"]):
+            visit(child, depth + 1)
+
+    for root in sorted(roots, key=lambda item: item["pid"]):
+        visit(root, 0)
+    return ordered
+
+
 def display_processes(sample: Sample) -> None:
     if not sample.get("process_stats_enabled", True):
         return
@@ -581,20 +641,31 @@ def display_processes(sample: Sample) -> None:
         )
     )
     print(
-        "{:>7} {:>7} {:>10} {:>10} {:>10} {:>10}  NAME / COMMAND".format(
-            "PID", "CPU", "RSS", "PSS", "USS", "SWAP"
+        "{:>7} {:>7} {:>5} {:>7} {:>10} {:>10} {:>10} {:>10}  {:<20} {:<10} COMMAND".format(
+            "PID", "PPID", "THR", "CPU", "RSS", "PSS", "USS", "SWAP",
+            "TYPE", "SOURCE"
         )
     )
-    for process in processes:
+    if sample.get("process_tree_enabled"):
+        rows = process_tree_order(processes)
+    else:
+        rows = [(0, process) for process in processes]
+
+    for depth, process in rows:
         command = process["command"] or process["name"]
+        process_type = "  " * depth + process["type"]
         print(
-            "{:>7} {:>7} {:>10} {:>10} {:>10} {:>10}  {}".format(
+            "{:>7} {:>7} {:>5} {:>7} {:>10} {:>10} {:>10} {:>10}  {:<20} {:<10} {}".format(
                 process["pid"],
+                process.get("ppid") or "-",
+                process.get("threads") or "-",
                 format_percent(process.get("cpu_percent")),
                 human_bytes(process.get("rss_bytes")),
                 human_bytes(process.get("pss_bytes")),
                 human_bytes(process.get("uss_bytes")),
                 human_bytes(process.get("swap_bytes")),
+                process_type,
+                process["type_source"],
                 command,
             )
         )
@@ -622,7 +693,8 @@ CSV_FIELDS = (
     "cgroup_shmem_bytes", "cgroup_slab_bytes", "cgroup_page_faults",
     "cgroup_major_page_faults",
     "process_count", "process_rss_total_bytes", "process_pss_total_bytes",
-    "process_uss_total_bytes", "pid", "name", "cpu_percent", "cpu_ticks",
+    "process_uss_total_bytes", "pid", "ppid", "name", "process_type",
+    "type_source", "threads", "executable", "cpu_percent", "cpu_ticks",
     "rss_bytes", "pss_bytes", "uss_bytes", "swap_bytes", "command",
 )
 
@@ -671,7 +743,12 @@ def write_csv_sample(sample: Sample, writer: csv.DictWriter) -> None:
         row = dict(base_row)
         row.update({
             "pid": process.get("pid"),
+            "ppid": process.get("ppid"),
             "name": process.get("name"),
+            "process_type": process.get("type"),
+            "type_source": process.get("type_source"),
+            "threads": process.get("threads"),
+            "executable": process.get("executable"),
             "cpu_percent": process.get("cpu_percent"),
             "cpu_ticks": process.get("cpu_ticks"),
             "rss_bytes": process.get("rss_bytes"),
@@ -778,6 +855,7 @@ async def stream(args: argparse.Namespace) -> None:
 
             sample = parse_collector_output(result.stdout)
             sample["process_stats_enabled"] = args.process_stats
+            sample["process_tree_enabled"] = args.process_tree
             elapsed = None if previous_time is None else sample_time - previous_time
             add_cpu_percentages(sample, previous_sample, elapsed)
             emit_sample(sample, args, csv_writer)
@@ -823,6 +901,11 @@ def add_collection_arguments(parser: argparse.ArgumentParser) -> None:
         "--mem-breakdown",
         action="store_true",
         help="include detailed cgroup memory statistics",
+    )
+    collection.add_argument(
+        "--process-tree",
+        action="store_true",
+        help="display processes in parent-child order",
     )
 
     process_output = collection.add_mutually_exclusive_group()
