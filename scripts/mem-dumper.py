@@ -691,16 +691,40 @@ def filter_processes(sample: Sample, args: argparse.Namespace) -> Sample:
     if args.min_cpu is None and args.min_rss is None:
         return sample
 
-    def matches(process: ProcessStats) -> bool:
-        if args.min_cpu is not None and (process.get("cpu_percent") or 0) < args.min_cpu:
-            return False
+    def matches_memory(process: ProcessStats) -> bool:
         if args.min_rss is not None and (process.get("rss_bytes") or 0) < args.min_rss:
             return False
         return True
 
+    def matches_process(process: ProcessStats) -> bool:
+        return (
+            matches_memory(process)
+            and (args.min_cpu is None or (process.get("cpu_percent") or 0) >= args.min_cpu)
+        )
+
+    def matches_thread(thread: Dict[str, Any]) -> bool:
+        # Threads share the parent process's address space, so RSS filtering is
+        # applied to the process only. CPU can be measured per thread.
+        return args.min_cpu is None or (thread.get("cpu_percent") or 0) >= args.min_cpu
+
     filtered = dict(sample)
     filtered["process_count_unfiltered"] = sample["process_count"]
-    filtered["processes"] = [process for process in sample["processes"] if matches(process)]
+    filtered_processes = []
+    for process in sample["processes"]:
+        threads = process.get("thread_details", [])
+        visible_threads = [thread for thread in threads if matches_thread(thread)]
+        if args.threads:
+            if not matches_memory(process):
+                continue
+            if args.min_cpu is not None and not matches_process(process) and not visible_threads:
+                continue
+        elif not matches_process(process):
+            continue
+        visible_process = dict(process)
+        if args.threads and args.min_cpu is not None:
+            visible_process["thread_details"] = visible_threads
+        filtered_processes.append(visible_process)
+    filtered["processes"] = filtered_processes
     filtered["process_count"] = len(filtered["processes"])
     return filtered
 
