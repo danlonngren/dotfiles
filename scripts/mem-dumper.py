@@ -59,6 +59,10 @@ pid_cgroup() {
     fi
 }
 
+# DobbyTool info may provide the complete container PID list. Keep it separate
+# so process collection can use that authoritative list instead of rediscovery.
+selected_pids=
+
 # Resolve the requested cgroup from a path, PID, process, or Dobby ID.
 case "$selector_type" in
     cgroup)
@@ -83,13 +87,28 @@ case "$selector_type" in
         ;;
     dobby)
         app_pid=
-        for cgroup_file in /proc/[0-9]*/cgroup; do
-            if grep -F "$selector" "$cgroup_file" >/dev/null 2>&1; then
-                app_pid=${cgroup_file#/proc/}
-                app_pid=${app_pid%/cgroup}
-                break
-            fi
+        dobby_info=$(DobbyTool info "$selector" 2>/dev/null)
+        dobby_pids=$(printf '%s\n' "$dobby_info" | sed -n \
+            's/.*"pids"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' | \
+            tr ',' ' ')
+
+        for candidate in $dobby_pids; do
+            case "$candidate" in *[!0-9]*|'') continue ;; esac
+            [ -d "/proc/$candidate" ] || continue
+            selected_pids="$selected_pids $candidate"
+            [ -n "$app_pid" ] || app_pid=$candidate
         done
+
+        # Support older DobbyTool builds which do not return a pids array.
+        if [ -z "$app_pid" ]; then
+            for cgroup_file in /proc/[0-9]*/cgroup; do
+                if grep -F "$selector" "$cgroup_file" >/dev/null 2>&1; then
+                    app_pid=${cgroup_file#/proc/}
+                    app_pid=${app_pid%/cgroup}
+                    break
+                fi
+            done
+        fi
         [ -n "$app_pid" ] || { printf 'E\tDobby container not found in cgroups: %s\n' "$selector"; exit 2; }
         requested=$(pid_cgroup "$app_pid")
         ;;
@@ -230,8 +249,13 @@ fi
 
 
 PROCESS_STATS_SH = dedent(r'''
-# Find processes in this cgroup and all descendant cgroups.
-pids=$(find "$cgroup" -type f -name "$pid_file" -exec cat {} \; 2>/dev/null | sort -nu)
+# Dobby supplies its container PIDs directly. Other selectors use cgroup
+# membership, including all descendant cgroups.
+if [ -n "$selected_pids" ]; then
+    pids=$(printf '%s\n' $selected_pids | sort -nu)
+else
+    pids=$(find "$cgroup" -type f -name "$pid_file" -exec cat {} \; 2>/dev/null | sort -nu)
+fi
 process_count=$(printf '%s\n' "$pids" | awk 'NF {count++} END {print count+0}')
 printf 'C\t%s\n' "$process_count"
 
