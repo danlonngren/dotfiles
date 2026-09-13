@@ -39,6 +39,7 @@ selector=$2
 include_breakdown=$3
 include_process_stats=$4
 include_thread_stats=$5
+include_process_tree=$6
 
 # Detect cgroup version and memory hierarchy root.
 if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
@@ -73,6 +74,7 @@ case "$selector_type" in
     pid)
         case "$selector" in *[!0-9]*|'') printf 'E\tinvalid PID: %s\n' "$selector"; exit 2 ;; esac
         requested=$(pid_cgroup "$selector")
+        selected_pids=$selector
         ;;
     process)
         app_pid=$(pgrep -x "$selector" 2>/dev/null | tail -n 1)
@@ -86,6 +88,7 @@ case "$selector_type" in
         fi
         [ -n "$app_pid" ] || { printf 'E\tprocess not found: %s\n' "$selector"; exit 2; }
         requested=$(pid_cgroup "$app_pid")
+        selected_pids=$app_pid
         ;;
     dobby)
         app_pid=
@@ -251,10 +254,37 @@ fi
 
 
 PROCESS_STATS_SH = dedent(r'''
-# DobbyTool supplies the exact container PID list to report. Other selectors
-# use cgroup membership, including all descendant cgroups.
+# Explicit PID, process, and Dobby selectors use their discovered PID list.
+# --process-tree expands only PID/process selectors through their descendants;
+# Dobby always retains the exact PID list returned by DobbyTool. An explicit
+# cgroup reports its membership, including all descendant cgroups.
 if [ -n "$selected_pids" ]; then
     pids=$(printf '%s\n' $selected_pids | sort -nu)
+    if [ "$include_process_tree" = "1" ] && [ "$selector_type" != "dobby" ]; then
+        seen=$(printf ' %s ' $pids)
+        frontier=$pids
+        while [ -n "$frontier" ]; do
+            next=
+            for proc in /proc/[0-9]*; do
+                [ -r "$proc/status" ] || continue
+                candidate=${proc#/proc/}
+                case "$seen" in *" $candidate "*) continue ;; esac
+                parent=$(awk '$1 == "PPid:" {print $2; exit}' "$proc/status" 2>/dev/null)
+                for root_pid in $frontier; do
+                    if [ "$parent" = "$root_pid" ]; then
+                        seen="$seen$candidate "
+                        next="${next}
+${candidate}"
+                        break
+                    fi
+                done
+            done
+            pids="${pids}
+${next}"
+            frontier=$next
+        done
+        pids=$(printf '%s\n' $pids | sort -nu)
+    fi
 else
     pids=$(find "$cgroup" -type f -name "$pid_file" -exec cat {} \; 2>/dev/null | sort -nu)
 fi
@@ -760,6 +790,8 @@ def display_processes(sample: Sample) -> None:
 
     for depth, process in rows:
         command = process["command"] or process["name"]
+        if not sample.get("show_all_commands"):
+            command = command.split(maxsplit=1)[0] if command else process["name"]
         process_type = "  " * depth + process["type"]
         print(
             "{:>7} {:>7} {:>5} {:>7} {:>10} {:>10} {:>10} {:>10}  {:<20} {:<10} {}".format(
@@ -935,6 +967,7 @@ def build_remote_command(args: argparse.Namespace) -> str:
         "1" if args.mem_breakdown else "0",
         "1" if args.process_stats else "0",
         "1" if args.threads else "0",
+        "1" if args.process_tree else "0",
     ]
     return " ".join(shlex.quote(part) for part in remote_args)
 
@@ -980,6 +1013,7 @@ async def stream(args: argparse.Namespace) -> None:
             sample = parse_collector_output(result.stdout)
             sample["process_stats_enabled"] = args.process_stats
             sample["thread_stats_enabled"] = args.threads
+            sample["show_all_commands"] = args.show_all_commands
             sample["process_tree_enabled"] = args.process_tree
             elapsed = None if previous_time is None else sample_time - previous_time
             add_cpu_percentages(sample, previous_sample, elapsed)
@@ -1036,6 +1070,11 @@ def add_collection_arguments(parser: argparse.ArgumentParser) -> None:
         "--threads",
         action="store_true",
         help="include per-thread CPU, scheduler, and wait information",
+    )
+    collection.add_argument(
+        "--show-all-commands",
+        action="store_true",
+        help="show full command lines in the human-readable process table",
     )
 
     process_output = collection.add_mutually_exclusive_group()
