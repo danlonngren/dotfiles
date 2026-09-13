@@ -249,12 +249,14 @@ fi
 
 
 PROCESS_STATS_SH = dedent(r'''
-# DobbyTool supplies one or more container PIDs. Expand those roots through
-# /proc so the report includes every live descendant, even if DobbyTool only
-# returned the container init process. Other selectors use cgroup membership,
-# including all descendant cgroups.
+# DobbyTool supplies one or more container PIDs, but that list can omit worker
+# processes. Start with all PIDs in the resolved container cgroup (and nested
+# cgroups), retain Dobby's explicit PIDs, then expand descendants through
+# /proc for processes which moved to a child cgroup. Other selectors use
+# cgroup membership, including all descendant cgroups.
 if [ -n "$selected_pids" ]; then
-    pids=$(printf '%s\n' $selected_pids | sort -nu)
+    cgroup_pids=$(find "$cgroup" -type f -name "$pid_file" -exec cat {} \; 2>/dev/null | sort -nu)
+    pids=$(printf '%s\n' $selected_pids $cgroup_pids | sort -nu)
     seen=$(printf ' %s ' $pids)
     frontier=$pids
     while [ -n "$frontier" ]; do
