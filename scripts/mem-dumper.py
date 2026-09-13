@@ -27,6 +27,7 @@ SUMMARY_RECORD = "S"
 MEMORY_RECORD = "M"
 PROCESS_COUNT_RECORD = "C"
 PROCESS_RECORD = "P"
+THREAD_RECORD = "T"
 
 
 # This collector deliberately uses only POSIX shell and common BusyBox tools.
@@ -37,6 +38,7 @@ selector_type=$1
 selector=$2
 include_breakdown=$3
 include_process_stats=$4
+include_thread_stats=$5
 
 # Detect cgroup version and memory hierarchy root.
 if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
@@ -328,6 +330,33 @@ if [ "$include_process_stats" = "1" ]; then
     printf 'P\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$pid" "$ppid" "$rss" "$pss" "$uss" "$swap" "$cpu_ticks" \
         "$start_ticks" "$threads" "$name" "$executable" "$command"
+
+    if [ "$include_thread_stats" = "1" ]; then
+        for task in "$proc"/task/[0-9]*; do
+            [ -r "$task/stat" ] || continue
+            tid=${task##*/}
+            thread_name=$(tr '\t\r\n' '   ' < "$task/comm" 2>/dev/null)
+            thread_values=$(sed 's/^.*) //' "$task/stat" 2>/dev/null | \
+                awk '{print $1, $12+$13, $20, $37}')
+            set -- $thread_values
+            thread_state=${1:--}
+            thread_cpu_ticks=${2:--}
+            thread_start_ticks=${3:--}
+            thread_last_cpu=${4:--}
+            thread_affinity=$(awk '$1 == "Cpus_allowed_list:" {print $2; exit}' \
+                "$task/status" 2>/dev/null)
+            thread_voluntary=$(awk '$1 == "voluntary_ctxt_switches:" {print $2; exit}' \
+                "$task/status" 2>/dev/null)
+            thread_nonvoluntary=$(awk '$1 == "nonvoluntary_ctxt_switches:" {print $2; exit}' \
+                "$task/status" 2>/dev/null)
+            thread_wchan=$(tr '\t\r\n' '   ' < "$task/wchan" 2>/dev/null)
+            printf 'T\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$pid" "$tid" "$thread_cpu_ticks" "$thread_start_ticks" \
+                "$thread_last_cpu" "$thread_state" "$thread_affinity" \
+                "$thread_wchan" "$thread_voluntary" "$thread_nonvoluntary" \
+                "$thread_name"
+        done
+    fi
 done
 fi
 ''')
@@ -468,6 +497,26 @@ def parse_process_record(fields: List[str]) -> ProcessStats:
     }
 
 
+def parse_thread_record(fields: List[str]) -> Dict[str, Any]:
+    """Parse a thread record; memory is intentionally process-level only."""
+    if len(fields) < 12:
+        raise RuntimeError("invalid thread record from target")
+    return {
+        "pid": parse_number(fields[1]),
+        "tid": parse_number(fields[2]),
+        "cpu_ticks": parse_number(fields[3]),
+        "start_ticks": parse_number(fields[4]),
+        "last_cpu": parse_number(fields[5]),
+        "state": fields[6] or "?",
+        "affinity": fields[7] or "-",
+        "wchan": fields[8] or "-",
+        "voluntary_context_switches": parse_number(fields[9]),
+        "nonvoluntary_context_switches": parse_number(fields[10]),
+        "name": "\t".join(fields[11:]).strip() or "?",
+        "cpu_percent": None,
+    }
+
+
 def add_system_memory_usage(sample: Sample) -> None:
     """Derive used system memory from total and available memory."""
     system = sample["system"]
@@ -487,6 +536,7 @@ def parse_collector_output(output: str) -> Sample:
     memory_breakdown = None
     process_count = None
     processes = []  # type: List[ProcessStats]
+    threads_by_pid = {}  # type: Dict[int, List[Dict[str, Any]]]
 
     for line in output.splitlines():
         fields = line.split("\t")
@@ -501,6 +551,10 @@ def parse_collector_output(output: str) -> Sample:
             memory_breakdown = parse_memory_record(fields)
         elif record_type == PROCESS_RECORD:
             processes.append(parse_process_record(fields))
+        elif record_type == THREAD_RECORD:
+            thread = parse_thread_record(fields)
+            if thread["pid"] is not None:
+                threads_by_pid.setdefault(thread["pid"], []).append(thread)
         elif record_type == PROCESS_COUNT_RECORD and len(fields) == 2:
             process_count = parse_number(fields[1])
 
@@ -508,6 +562,11 @@ def parse_collector_output(output: str) -> Sample:
         raise RuntimeError("remote collector returned no cgroup data")
 
     processes.sort(key=lambda process: process.get("rss_bytes") or 0, reverse=True)
+    for process in processes:
+        process["thread_details"] = sorted(
+            threads_by_pid.get(process["pid"], []),
+            key=lambda thread: thread.get("tid") or 0,
+        )
     sample["memory"]["breakdown"] = memory_breakdown
     sample["timestamp"] = datetime.now(timezone.utc).isoformat()
     sample["process_count"] = process_count if process_count is not None else len(processes)
@@ -574,6 +633,29 @@ def update_process_cpu(sample: Sample, previous: Sample, elapsed: float) -> None
             process["cpu_percent"] = tick_delta / clock_ticks / elapsed * 100
 
 
+def update_thread_cpu(sample: Sample, previous: Sample, elapsed: float) -> None:
+    """Calculate CPU usage for threads which existed in both samples."""
+    old_threads = {
+        (thread["pid"], thread["tid"], thread.get("start_ticks")): thread
+        for process in previous["processes"]
+        for thread in process.get("thread_details", [])
+    }
+    clock_ticks = sample["cpu"].get("clock_ticks") or 100
+    for process in sample["processes"]:
+        for thread in process.get("thread_details", []):
+            identity = (thread["pid"], thread["tid"], thread.get("start_ticks"))
+            old = old_threads.get(identity)
+            if old is None:
+                continue
+            current_ticks = thread.get("cpu_ticks")
+            old_ticks = old.get("cpu_ticks")
+            if current_ticks is None or old_ticks is None:
+                continue
+            tick_delta = current_ticks - old_ticks
+            if tick_delta >= 0:
+                thread["cpu_percent"] = tick_delta / clock_ticks / elapsed * 100
+
+
 def add_cpu_percentages(
     sample: Sample,
     previous: Optional[Sample],
@@ -586,6 +668,7 @@ def add_cpu_percentages(
     update_system_cpu(sample, previous)
     update_cgroup_cpu(sample, previous, elapsed)
     update_process_cpu(sample, previous, elapsed)
+    update_thread_cpu(sample, previous, elapsed)
 
 
 def format_percent(value: Optional[float]) -> str:
@@ -720,6 +803,22 @@ def display_processes(sample: Sample) -> None:
                 command,
             )
         )
+        if sample.get("thread_stats_enabled"):
+            for thread in process.get("thread_details", []):
+                print(
+                    "  TID={:<7} CPU={:>7} STATE={} CORE={:<4} AFFINITY={:<10} "
+                    "WCHAN={:<22} VCSW={:<8} IVCSW={:<8} {}".format(
+                        thread.get("tid") or "-",
+                        format_percent(thread.get("cpu_percent")),
+                        thread.get("state") or "?",
+                        thread.get("last_cpu") if thread.get("last_cpu") is not None else "-",
+                        thread.get("affinity") or "-",
+                        thread.get("wchan") or "-",
+                        thread.get("voluntary_context_switches") or 0,
+                        thread.get("nonvoluntary_context_switches") or 0,
+                        thread.get("name") or "?",
+                    )
+                )
 
 
 def display(sample: Sample, json_output: bool) -> None:
@@ -862,6 +961,7 @@ def build_remote_command(args: argparse.Namespace) -> str:
         "sh", "-s", "--", selector_type, selector,
         "1" if args.mem_breakdown else "0",
         "1" if args.process_stats else "0",
+        "1" if args.threads else "0",
     ]
     return " ".join(shlex.quote(part) for part in remote_args)
 
@@ -906,6 +1006,7 @@ async def stream(args: argparse.Namespace) -> None:
 
             sample = parse_collector_output(result.stdout)
             sample["process_stats_enabled"] = args.process_stats
+            sample["thread_stats_enabled"] = args.threads
             # Dobby PID discovery is a set of process-tree roots, so render
             # its descendants as a tree without requiring an extra flag.
             sample["process_tree_enabled"] = (
@@ -962,6 +1063,11 @@ def add_collection_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="display processes in parent-child order (automatic for Dobby)",
     )
+    collection.add_argument(
+        "--threads",
+        action="store_true",
+        help="include per-thread CPU, scheduler, and wait information",
+    )
 
     process_output = collection.add_mutually_exclusive_group()
     process_output.add_argument(
@@ -998,6 +1104,8 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         )
     if args.interval <= 0:
         parser.error("--interval must be greater than zero")
+    if args.threads and not args.process_stats:
+        parser.error("--threads requires --process-stats")
 
 
 def parse_args() -> argparse.Namespace:
