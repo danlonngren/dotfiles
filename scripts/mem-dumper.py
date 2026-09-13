@@ -249,10 +249,35 @@ fi
 
 
 PROCESS_STATS_SH = dedent(r'''
-# Dobby supplies its container PIDs directly. Other selectors use cgroup
-# membership, including all descendant cgroups.
+# DobbyTool supplies one or more container PIDs. Expand those roots through
+# /proc so the report includes every live descendant, even if DobbyTool only
+# returned the container init process. Other selectors use cgroup membership,
+# including all descendant cgroups.
 if [ -n "$selected_pids" ]; then
     pids=$(printf '%s\n' $selected_pids | sort -nu)
+    seen=$(printf ' %s ' $pids)
+    frontier=$pids
+    while [ -n "$frontier" ]; do
+        next=
+        for proc in /proc/[0-9]*; do
+            [ -r "$proc/status" ] || continue
+            candidate=${proc#/proc/}
+            case "$seen" in *" $candidate "*) continue ;; esac
+            parent=$(awk '$1 == "PPid:" {print $2; exit}' "$proc/status" 2>/dev/null)
+            for root_pid in $frontier; do
+                if [ "$parent" = "$root_pid" ]; then
+                    seen="$seen$candidate "
+                    next="${next}
+${candidate}"
+                    break
+                fi
+            done
+        done
+        pids="${pids}
+${next}"
+        frontier=$next
+    done
+    pids=$(printf '%s\n' $pids | sort -nu)
 else
     pids=$(find "$cgroup" -type f -name "$pid_file" -exec cat {} \; 2>/dev/null | sort -nu)
 fi
@@ -879,7 +904,11 @@ async def stream(args: argparse.Namespace) -> None:
 
             sample = parse_collector_output(result.stdout)
             sample["process_stats_enabled"] = args.process_stats
-            sample["process_tree_enabled"] = args.process_tree
+            # Dobby PID discovery is a set of process-tree roots, so render
+            # its descendants as a tree without requiring an extra flag.
+            sample["process_tree_enabled"] = (
+                args.process_tree or args.dobby_container is not None
+            )
             elapsed = None if previous_time is None else sample_time - previous_time
             add_cpu_percentages(sample, previous_sample, elapsed)
             emit_sample(sample, args, csv_writer)
@@ -929,7 +958,7 @@ def add_collection_arguments(parser: argparse.ArgumentParser) -> None:
     collection.add_argument(
         "--process-tree",
         action="store_true",
-        help="display processes in parent-child order",
+        help="display processes in parent-child order (automatic for Dobby)",
     )
 
     process_output = collection.add_mutually_exclusive_group()
