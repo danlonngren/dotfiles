@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import csv
 import json
+import re
 import shlex
 import sys
 import time
@@ -396,6 +397,17 @@ def parse_number(value: str, multiplier: int = 1) -> Optional[int]:
         return None
 
 
+def parse_size_argument(value: str) -> int:
+    """Parse a byte threshold such as 20MiB for command-line filtering."""
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(B|KiB|MiB|GiB|TiB)?\s*", value,
+                         flags=re.IGNORECASE)
+    if match is None:
+        raise argparse.ArgumentTypeError("use a size such as 20MiB or 1GiB")
+    units = {"b": 1, "kib": 1024, "mib": 1024 ** 2, "gib": 1024 ** 3,
+             "tib": 1024 ** 4}
+    return int(float(match.group(1)) * units[(match.group(2) or "B").lower()])
+
+
 def parse_summary_record(fields: List[str]) -> Sample:
     """Parse the main cgroup and system record."""
     if len(fields) != 15:
@@ -674,6 +686,25 @@ def add_cpu_percentages(
     update_thread_cpu(sample, previous, elapsed)
 
 
+def filter_processes(sample: Sample, args: argparse.Namespace) -> Sample:
+    """Return a display/export sample limited by optional process thresholds."""
+    if args.min_cpu is None and args.min_rss is None:
+        return sample
+
+    def matches(process: ProcessStats) -> bool:
+        if args.min_cpu is not None and (process.get("cpu_percent") or 0) < args.min_cpu:
+            return False
+        if args.min_rss is not None and (process.get("rss_bytes") or 0) < args.min_rss:
+            return False
+        return True
+
+    filtered = dict(sample)
+    filtered["process_count_unfiltered"] = sample["process_count"]
+    filtered["processes"] = [process for process in sample["processes"] if matches(process)]
+    filtered["process_count"] = len(filtered["processes"])
+    return filtered
+
+
 def format_percent(value: Optional[float]) -> str:
     return "-" if value is None else "{:.1f}%".format(value)
 
@@ -706,6 +737,9 @@ def display_cgroup(sample: Sample) -> None:
         if memory.get("limit_unlimited")
         else human_bytes(memory.get("limit_bytes"))
     )
+    process_count = str(sample["process_count"])
+    if "process_count_unfiltered" in sample:
+        process_count += "/{} matched".format(sample["process_count_unfiltered"])
     print(
         "{}  cgroup-v{}  memory={}  peak={}  limit={}  CPU={}  processes={}".format(
             sample["timestamp"],
@@ -714,7 +748,7 @@ def display_cgroup(sample: Sample) -> None:
             human_bytes(memory.get("peak_bytes")),
             limit,
             format_percent(sample["cpu"].get("usage_percent")),
-            sample["process_count"],
+            process_count,
         )
     )
 
@@ -1017,7 +1051,7 @@ async def stream(args: argparse.Namespace) -> None:
             sample["process_tree_enabled"] = args.process_tree
             elapsed = None if previous_time is None else sample_time - previous_time
             add_cpu_percentages(sample, previous_sample, elapsed)
-            emit_sample(sample, args, csv_writer)
+            emit_sample(filter_processes(sample, args), args, csv_writer)
 
             previous_sample = sample
             previous_time = sample_time
@@ -1076,6 +1110,18 @@ def add_collection_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="show full command lines in the human-readable process table",
     )
+    collection.add_argument(
+        "--min-cpu",
+        type=float,
+        metavar="PERCENT",
+        help="show processes using at least this percent of one CPU core",
+    )
+    collection.add_argument(
+        "--min-rss",
+        type=parse_size_argument,
+        metavar="SIZE",
+        help="show processes with at least this RSS, e.g. 20MiB",
+    )
 
     process_output = collection.add_mutually_exclusive_group()
     process_output.add_argument(
@@ -1114,6 +1160,8 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
         parser.error("--interval must be greater than zero")
     if args.threads and not args.process_stats:
         parser.error("--threads requires --process-stats")
+    if args.min_cpu is not None and args.min_cpu < 0:
+        parser.error("--min-cpu must be zero or greater")
 
 
 def parse_args() -> argparse.Namespace:
