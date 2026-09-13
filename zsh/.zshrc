@@ -64,11 +64,22 @@ bindkey '^[[B' down-line-or-beginning-search
 
 # Some terminals (and tmux) send application-cursor sequences for arrow keys.
 # Bind those variants too so prefix history search works consistently.
-bindkey '^[OA' up-line-or-beginning-search
-bindkey '^[OB' down-line-or-beginning-search
+# bindkey '^[OA' up-line-or-beginning-search
+# bindkey '^[OB' down-line-or-beginning-search
 
-bindkey '^[[C' forward-char
-bindkey '^[[D' backward-char
+# bindkey '^[[C' forward-char
+# bindkey '^[[D' backward-char
+
+# Home/End vary between terminal emulators and tmux. Support the common ANSI,
+# application-cursor, and xterm-style sequences.
+bindkey '^[[H' beginning-of-line
+bindkey '^[OH' beginning-of-line
+bindkey '^[[1~' beginning-of-line
+bindkey '^[[7~' beginning-of-line
+bindkey '^[[F' end-of-line
+bindkey '^[OF' end-of-line
+bindkey '^[[4~' end-of-line
+bindkey '^[[8~' end-of-line
 
 # History
 HISTSIZE=5000

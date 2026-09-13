@@ -56,6 +56,17 @@ bind '"\e[D": backward-char'
 bind '"\eOC": forward-char'
 bind '"\eOD": backward-char'
 
+# Home/End vary between terminal emulators and tmux. Support the common ANSI,
+# application-cursor, and xterm-style sequences.
+bind '"\e[H": beginning-of-line'
+bind '"\eOH": beginning-of-line'
+bind '"\e[1~": beginning-of-line'
+bind '"\e[7~": beginning-of-line'
+bind '"\e[F": end-of-line'
+bind '"\eOF": end-of-line'
+bind '"\e[4~": end-of-line'
+bind '"\e[8~": end-of-line'
+
 # ---------------------------------------------------
 # Shell integrations
 # ---------------------------------------------------
