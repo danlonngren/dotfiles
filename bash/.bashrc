@@ -12,25 +12,6 @@ if command -v brew >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------
-# Directories
-# ---------------------------------------------------
-# export DOTFILES=""
-export GITUSER="$USER"
-export REPOS="$HOME/git"
-export GHREPOS="$REPOS/github.com/$GITUSER"
-export ICLOUD="$HOME/icloud"
-export DOTSCRIPTS="$HOME/scripts"
-
-# PATH and platform tools
-export PATH="$HOME/bin:$HOME/.local/bin:$HOME/dotnet:$DOTSCRIPTS:$PATH"
-
-if command -v brew >/dev/null 2>&1; then
-	llvm_bin="$(brew --prefix llvm 2>/dev/null)/bin"
-	[[ -d "$llvm_bin" ]] && export PATH="$llvm_bin:$PATH"
-	unset llvm_bin
-fi
-
-# ---------------------------------------------------
 # Shell behaviour
 # ---------------------------------------------------
 HISTSIZE=5000
@@ -82,10 +63,10 @@ fi
 # Sources
 # ---------------------------------------------------
 # shellcheck source=/dev/null
-[[ -r "$HOME/.shellrc-common" ]] && source "$HOME/.shellrc-common"
+[[ -r "$HOME/.shellrc_common" ]] && source "$HOME/.shellrc_common"
 # shellcheck source=/dev/null
-[[ -r "$HOME/.bashrc-aliases" ]] && source "$HOME/.bashrc-aliases"
+[[ -r "$HOME/.bashrc_aliases" ]] && source "$HOME/.bashrc_aliases"
 
 # Keep machine-specific aliases and credentials outside this repository.
 # shellcheck source=/dev/null
-[[ -r "$HOME/.bashrc-local" ]] && source "$HOME/.bashrc-local"
+[[ -r "$HOME/.bashrc_local" ]] && source "$HOME/.bashrc_local"

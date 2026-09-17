@@ -62,13 +62,13 @@ mkdir -p "$HOME/.config/tmux"
 
 # zshrc
 link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
-link_path "$repo_dir/zsh/.zshrc-paths" "$HOME/.zshrc-paths"
-link_path "$repo_dir/zsh/.zshrc-aliases" "$HOME/.zshrc-aliases"
-link_path "$repo_dir/shell/.shellrc-common" "$HOME/.shellrc-common"
+link_path "$repo_dir/zsh/.zshrc_paths" "$HOME/.zshrc_paths"
+link_path "$repo_dir/zsh/.zshrc_aliases" "$HOME/.zshrc_aliases"
+link_path "$repo_dir/shell/.shellrc_common" "$HOME/.shellrc_common"
 
 # Bashrc
 link_path "$repo_dir/bash/.bashrc" "$HOME/.bashrc"
-link_path "$repo_dir/bash/.bashrc-aliases" "$HOME/.bashrc-aliases"
+link_path "$repo_dir/bash/.bashrc_aliases" "$HOME/.bashrc_aliases"
 
 link_path "$repo_dir/tmux/tmux.conf" "$HOME/.config/tmux/tmux.conf"
 link_path "$repo_dir/nvim" "$HOME/.config/nvim"

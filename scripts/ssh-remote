@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+import argparse
+import asyncio
+import asyncssh
+
+
+def parse_target(target: str):
+    auth, host = target.rsplit("@", 1)
+    username, password = auth.split(":", 1)
+    return username, password, host
+
+
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("target", help="username:password@host")
+    parser.add_argument("commands", nargs="+")
+    parser.add_argument(
+        "--ignore-known-hosts",
+        action="store_true",
+        help="Disable SSH host key verification",
+    )
+    args = parser.parse_args()
+
+    username, password, host = parse_target(args.target)
+
+    known_hosts = None if args.ignore_known_hosts else ()
+
+    async with asyncssh.connect(
+        host,
+        username=username,
+        password=password,
+        known_hosts=known_hosts,
+    ) as conn:
+        for command in args.commands:
+            result = await conn.run(command, check=False)
+
+            if result.stdout:
+                print(result.stdout, end="")
+
+            if result.stderr:
+                print(result.stderr, end="")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

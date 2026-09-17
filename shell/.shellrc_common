@@ -1,5 +1,20 @@
 # Shared Bash and Zsh configuration.
 
+# Paths
+export REPOS="$HOME/git"
+export GHREPOS="$REPOS/github.com/$GITUSER"
+export ICLOUD="$HOME/icloud"
+export DOTSCRIPTS="$HOME/scripts"
+
+if command -v brew >/dev/null 2>&1; then
+	llvm_bin="$(brew --prefix llvm 2>/dev/null)/bin"
+	[[ -d "$llvm_bin" ]] && export PATH="$llvm_bin:$PATH"
+	unset llvm_bin
+fi
+
+export PATH="$HOME/bin:$HOME/.local/bin:$HOME/dotnet:$DOTSCRIPTS:$PATH"
+
+# Alias
 alias v='nvim'
 alias c='clear'
 alias e='exit'

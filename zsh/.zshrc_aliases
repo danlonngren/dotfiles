@@ -1,4 +1,5 @@
 alias refresh="exec zsh"
 alias vrc="nvim ~/.zshrc"
+alias v="nvim"
 
 alias pstatus='echo "${pipestatus[*]}"'

@@ -29,7 +29,15 @@ fi
 "${apt[@]}" install --yes \
 	bat \
 	fzf \
-	git \
+	git \	
+	fd-find \
+	htop \
+	jq \
+	btop \
+	tldr \
+	procps \
+	tree \
+	duf
 	neovim \
 	ripgrep \
 	shellcheck \

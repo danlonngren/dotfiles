@@ -1,5 +1,16 @@
 # Core command-line tools used by this configuration.
+cask "font-jetbrains-mono-nerd-font"
+
 brew "bat"
+brew "fd"
+brew "htop"
+brew "jq"
+brew "htop"
+brew "btop"
+brew "tldr"
+brew "watch"
+brew "tree"
+brew "duf"
 brew "fzf"
 brew "git"
 brew "neovim"
@@ -12,3 +23,10 @@ brew "zsh-autosuggestions"
 brew "zsh-syntax-highlighting"
 brew "zoxide"
 brew "zsh"
+brew "pure"
+
+# Development
+brew "cmake"
+brew "ninja"
+brew "gdb"
+brew "pkg-config"

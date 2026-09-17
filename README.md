@@ -32,7 +32,7 @@ Zsh initializes `fzf` and `zoxide` only when they are available. The Brewfile in
 
 ## Zsh
 
-The installer checks out Zinit to `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`). The main configuration loads it for Powerlevel10k, completions, syntax highlighting, autosuggestions, and fzf-tab; shell startup never performs a network checkout.
+The installer checks out Zinit to `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`). The main configuration loads it for the Pure prompt, completions, syntax highlighting, autosuggestions, and fzf-tab; shell startup never performs a network checkout.
 
 `~/.zshrc-paths` sets the repository locations and adds `~/scripts` to `PATH`. `~/.shellrc-common` contains shared aliases and fzf helpers for both shells; the shell-specific alias files retain only shell-specific behavior. The `ff`, `fdc`, `gf`, `gv`, `gb`, `gt`, and `gl` helpers use fzf; previews use `bat` when available and fall back to `sed` (`batcat` is supported on Ubuntu). `~/scripts/fzf-git` remains as a compatibility loader for older configurations.
 
