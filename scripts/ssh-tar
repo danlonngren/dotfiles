@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+# Transfer a file or directory over a regular SSH command, without scp/SFTP.
+# Configure SSH options (port, identity file, legacy algorithms, etc.) in
+# ~/.ssh/config and use that host alias as TARGET.
+
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage:
+  ssh-tar put SOURCE TARGET REMOTE_DIRECTORY
+  ssh-tar get TARGET REMOTE_SOURCE LOCAL_DIRECTORY
+
+Examples:
+  ssh-tar put ./photos old-server /var/tmp
+  ssh-tar get old-server /var/log ./downloads
+
+`put` copies SOURCE into REMOTE_DIRECTORY. `get` copies REMOTE_SOURCE into
+LOCAL_DIRECTORY. SOURCE may be either a regular file or a directory.
+EOF
+}
+
+shell_quote() {
+    # Produce a POSIX-shell-safe single argument for the remote command.
+    printf "'%s'" "${1//\'/\'\"\'\"\'}"
+}
+
+if [[ ${1:-} == -h || ${1:-} == --help || ${1:-} == help ]]; then
+    usage
+    exit 0
+fi
+
+if [[ $# -ne 4 ]]; then
+    usage >&2
+    exit 64
+fi
+
+case $1 in
+    put)
+        source=$2
+        target=$3
+        remote_directory=$4
+
+        if [[ ! -e $source ]]; then
+            printf 'Source does not exist: %s\n' "$source" >&2
+            exit 1
+        fi
+
+        source_parent=$(dirname -- "$source")
+        source_name=$(basename -- "$source")
+        # Deliberately avoid GNU-only tar options on the remote, which may be
+        # a much older Unix system.
+        remote_command="mkdir -p $(shell_quote "$remote_directory") && tar xf - -C $(shell_quote "$remote_directory")"
+
+        tar -C "$source_parent" -cf - "./$source_name" | ssh "$target" "$remote_command"
+        ;;
+    get)
+        target=$2
+        remote_source=$3
+        local_directory=$4
+
+        mkdir -p -- "$local_directory"
+        remote_command="tar cf - $(shell_quote "$remote_source")"
+
+        ssh "$target" "$remote_command" | tar -xf - -C "$local_directory"
+        ;;
+    *)
+        usage >&2
+        exit 64
+        ;;
+esac
