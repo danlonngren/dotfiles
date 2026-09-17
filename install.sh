@@ -62,18 +62,22 @@ mkdir -p "$HOME/.config/tmux"
 
 # zshrc
 link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
-link_path "$repo_dir/zsh/.zshrc_paths" "$HOME/.zshrc_paths"
-link_path "$repo_dir/zsh/.zshrc_aliases" "$HOME/.zshrc_aliases"
 link_path "$repo_dir/shell/.shellrc_common" "$HOME/.shellrc_common"
 
 # Bashrc
 link_path "$repo_dir/bash/.bashrc" "$HOME/.bashrc"
-link_path "$repo_dir/bash/.bashrc_aliases" "$HOME/.bashrc_aliases"
 
 link_path "$repo_dir/tmux/tmux.conf" "$HOME/.config/tmux/tmux.conf"
 link_path "$repo_dir/nvim" "$HOME/.config/nvim"
 
 link_path "$repo_dir/scripts" "$HOME/scripts"
+
+# Load the repository-managed Git aliases without replacing any existing
+# global Git configuration.
+if command -v git >/dev/null 2>&1 \
+	&& ! git config --global --get-all include.path 2>/dev/null | grep -Fxq '~/.git_aliases'; then
+	git config --global --add include.path '~/.git_aliases'
+fi
 
 mkdir -p "$HOME/.config/tmuxinator"
 for project_file in "$repo_dir"/tmuxinator/*.yml; do

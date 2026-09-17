@@ -1,6 +1,20 @@
 # Shared Bash and Zsh configuration.
 
-# Paths
+# Helper
+__dotfiles_require() {
+	local tool
+
+	for tool in "$@"; do
+		if ! command -v "$tool" >/dev/null 2>&1; then
+			printf 'This command requires %s, but it is not installed or not on PATH.\n' "$tool" >&2
+			return 1
+		fi
+	done
+}
+
+# ------------------------------------------------------------
+# Path
+# ------------------------------------------------------------
 export REPOS="$HOME/git"
 export GHREPOS="$REPOS/github.com/$GITUSER"
 export ICLOUD="$HOME/icloud"
@@ -14,12 +28,16 @@ fi
 
 export PATH="$HOME/bin:$HOME/.local/bin:$HOME/dotnet:$DOTSCRIPTS:$PATH"
 
-# Alias
-alias v='nvim'
+# ------------------------------------------------------------
+# Aliases
+# ------------------------------------------------------------
+alias v='vim'
 alias c='clear'
 alias e='exit'
 alias tm='tmux'
+alias pstatus='echo "${pipestatus[*]}"'
 
+# Paths
 alias home='cd "$HOME"'
 alias dotscripts='cd "$DOTSCRIPTS"'
 alias icloud='cd "$ICLOUD"'
@@ -27,9 +45,24 @@ alias repos='cd "$REPOS"'
 alias ghrepos='cd "$GHREPOS"'
 alias gr='cd "$GHREPOS"'
 
+# Git shortcuts
 alias gp='git pull'
 alias gs='git status'
 alias lg='lazygit'
+
+alias gst='git status --short --branch'
+alias glog='git log --graph --decorate --oneline --all'
+alias glast='git log -1 HEAD'
+alias gunstage='git restore --staged --'
+alias gamend='git commit --amend --no-edit'
+alias gff='git pull --ff-only'
+alias gprune='git fetch --prune'
+alias grb='git rebase'
+alias grbi='git rebase --interactive'
+alias gr1='git reset --mixed HEAD~1'
+alias gr2='git reset --mixed HEAD~2'
+alias gr3='git reset --mixed HEAD~3'
+alias gr4='git reset --mixed HEAD~4'
 
 if [[ "${OSTYPE:-}" == darwin* ]]; then
 	alias ls='ls -G'
@@ -39,16 +72,9 @@ fi
 alias la='ls -lathr'
 alias lastmod='find . -type f -not -path "*/.*" -exec ls -lrt {} +'
 
-__dotfiles_require() {
-	local tool
-
-	for tool in "$@"; do
-		if ! command -v "$tool" >/dev/null 2>&1; then
-			printf 'This command requires %s, but it is not installed or not on PATH.\n' "$tool" >&2
-			return 1
-		fi
-	done
-}
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
 
 if command -v bat >/dev/null 2>&1; then
 	export FZF_PREVIEW_COMMAND='bat --color=always --style=numbers'
@@ -74,10 +100,12 @@ fdc() {
 	cd "$dir" || return
 }
 
-# Oh My Zsh's Git snippet may define these as aliases.
+# Oh My Zsh's Git plugin defines these names as aliases. Remove them before
+# defining our fzf-based helpers; `function name { ... }` also avoids Zsh
+# expanding a pre-existing alias while it parses this file.
 unalias gb gt gf gv gl 2>/dev/null
 
-gb() {
+function gb {
 	local branch
 
 	__dotfiles_require git fzf || return
@@ -85,7 +113,7 @@ gb() {
 	git switch "$branch" 2>/dev/null || git switch --track "origin/$branch"
 }
 
-gt() {
+function gt {
 	local tag
 
 	__dotfiles_require git fzf || return
@@ -93,7 +121,7 @@ gt() {
 	git checkout "$tag"
 }
 
-gf() {
+function gf {
 	local file
 
 	__dotfiles_require git fzf || return
@@ -101,7 +129,7 @@ gf() {
 	printf '%s\n' "$file"
 }
 
-gv() {
+function gv {
 	local file
 
 	__dotfiles_require git fzf nvim || return
@@ -109,7 +137,7 @@ gv() {
 	nvim "$file"
 }
 
-gl() {
+function gl {
 	local commit
 
 	__dotfiles_require git fzf || return

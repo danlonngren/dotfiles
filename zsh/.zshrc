@@ -2,6 +2,17 @@ if command -v brew >/dev/null 2>&1; then
   eval "$(brew shellenv)"
 fi
 
+# ------------------------------------------------------------
+# Alias
+# ------------------------------------------------------------
+alias refresh="exec zsh"
+alias vrc="nvim ~/.zshrc"
+alias v="nvim"
+
+
+# ------------------------------------------------------------
+# ZINIT Setup
+# ------------------------------------------------------------
 # Set the directory we want to store zinit and plugins
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 
@@ -135,14 +146,14 @@ bindkey -M viins '^[[3~' delete-char
 
 # Home/End vary between terminal emulators and tmux. Support the common ANSI,
 # application-cursor, and xterm-style sequences.
-bindkey '^[[H' beginning-of-line
-bindkey '^[OH' beginning-of-line
-bindkey '^[[1~' beginning-of-line
-bindkey '^[[7~' beginning-of-line
-bindkey '^[[F' end-of-line
-bindkey '^[OF' end-of-line
-bindkey '^[[4~' end-of-line
-bindkey '^[[8~' end-of-line
+# bindkey '^[[H' beginning-of-line
+# bindkey '^[OH' beginning-of-line
+# bindkey '^[[1~' beginning-of-line
+# bindkey '^[[7~' beginning-of-line
+# bindkey '^[[F' end-of-line
+# bindkey '^[OF' end-of-line
+# bindkey '^[[4~' end-of-line
+# bindkey '^[[8~' end-of-line
 
 # History
 HISTSIZE=5000
@@ -173,8 +184,8 @@ if command -v zoxide >/dev/null 2>&1; then
   eval "$(zoxide init --cmd cd zsh)"
 fi
 
-# Source files
-[[ -r "$HOME/.zshrc_paths" ]] && source "$HOME/.zshrc_paths"
+# ------------------------------------------------------------
+# Sources
+# ------------------------------------------------------------
 [[ -r "$HOME/.shellrc_common" ]] && source "$HOME/.shellrc_common"
-[[ -r "$HOME/.zshrc_aliases" ]] && source "$HOME/.zshrc_aliases"
 [[ -r "$HOME/.zshrc_local" ]] && source "$HOME/.zshrc_local"

@@ -12,6 +12,31 @@ if command -v brew >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------
+# Aliases
+# ---------------------------------------------------
+alias refresh='exec bash'
+alias vrc='nvim ~/.bashrc'
+alias pstatus='echo "${PIPESTATUS[*]}"'
+
+# ---------------------------------------------------
+# Prompt
+# ---------------------------------------------------
+git_branch() {
+	command -v git >/dev/null 2>&1 || return
+	git symbolic-ref --short HEAD 2>/dev/null
+}
+
+__dotfiles_prompt_command() {
+	local branch
+	branch="$(git_branch)"
+	PS1='\[\e[32m\]➜\[\e[0m\] \[\e[36m\]\W\[\e[0m\] '
+	[[ -n "$branch" ]] && PS1+="\\[\\e[34m\\]git:($branch)\\[\\e[0m\\] "
+	PS1+='\$ '
+}
+
+PROMPT_COMMAND=__dotfiles_prompt_command
+
+# ---------------------------------------------------
 # Shell behaviour
 # ---------------------------------------------------
 HISTSIZE=5000
@@ -64,9 +89,4 @@ fi
 # ---------------------------------------------------
 # shellcheck source=/dev/null
 [[ -r "$HOME/.shellrc_common" ]] && source "$HOME/.shellrc_common"
-# shellcheck source=/dev/null
-[[ -r "$HOME/.bashrc_aliases" ]] && source "$HOME/.bashrc_aliases"
-
-# Keep machine-specific aliases and credentials outside this repository.
-# shellcheck source=/dev/null
 [[ -r "$HOME/.bashrc_local" ]] && source "$HOME/.bashrc_local"
