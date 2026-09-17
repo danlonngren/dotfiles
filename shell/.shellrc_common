@@ -72,6 +72,34 @@ fi
 alias la='ls -lathr'
 alias lastmod='find . -type f -not -path "*/.*" -exec ls -lrt {} +'
 
+# Zsh uses Emacs-style line editing by default, which has no Shift+Arrow
+# selection bindings. Add the familiar bindings without affecting Bash.
+if [[ -n ${ZSH_VERSION:-} ]]; then
+	__dotfiles_select_left() {
+		if (( ! REGION_ACTIVE )); then
+			MARK=$CURSOR
+			REGION_ACTIVE=1
+		fi
+		zle backward-char
+	}
+
+	__dotfiles_select_right() {
+		if (( ! REGION_ACTIVE )); then
+			MARK=$CURSOR
+			REGION_ACTIVE=1
+		fi
+		zle forward-char
+	}
+
+	zle -N __dotfiles_select_left
+	zle -N __dotfiles_select_right
+	for keymap in emacs viins; do
+		bindkey -M "$keymap" '^[[1;2D' __dotfiles_select_left
+		bindkey -M "$keymap" '^[[1;2C' __dotfiles_select_right
+	done
+	unset keymap
+fi
+
 # ------------------------------------------------------------
 # Functions
 # ------------------------------------------------------------
