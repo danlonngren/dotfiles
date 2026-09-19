@@ -29,7 +29,7 @@ fi
 "${apt[@]}" install --yes \
 	bat \
 	fzf \
-	git \	
+	git \
 	fd-find \
 	htop \
 	jq \
@@ -37,7 +37,7 @@ fi
 	tldr \
 	procps \
 	tree \
-	duf
+	duf \
 	neovim \
 	ripgrep \
 	shellcheck \
@@ -46,4 +46,7 @@ fi
 	tmuxinator \
 	zsh \
 	zsh-autosuggestions \
-	zsh-syntax-highlighting
+	zsh-syntax-highlighting \
+	curl \
+	fontconfig \
+	xz-utils

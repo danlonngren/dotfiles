@@ -10,7 +10,7 @@ Clone the repository, then run:
 ./install.sh
 ```
 
-The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.shellrc-common`, `~/.git_aliases`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
+The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.shellrc-common`, `~/.git_aliases`, `~/.config/starship.toml`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
 
 ### Dependencies
 
@@ -28,11 +28,11 @@ brew bundle --file Brewfile
 ./scripts/install-ubuntu-dependencies
 ```
 
-Zsh initializes `fzf` and `zoxide` only when they are available. The Brewfile installs both; install `zoxide` separately when using the Ubuntu installer. `git` is installed by both platform installers and is required for the Zinit checkout.
+Zsh initializes `fzf` and `zoxide` only when they are available. The Brewfile installs both; install `zoxide` separately when using the Ubuntu installer. The installer also installs JetBrains Mono Nerd Font (through Homebrew on macOS and from the official Nerd Fonts release on Ubuntu), then makes Zsh the default login shell when needed (this may prompt for your password). `git` is installed by both platform installers and is required for the Zinit checkout.
 
 ## Zsh
 
-The installer checks out Zinit to `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`). The main configuration loads it for the Pure prompt, completions, syntax highlighting, autosuggestions, and fzf-tab; shell startup never performs a network checkout.
+The installer checks out Zinit to `$XDG_DATA_HOME/zinit/zinit.git` (or `~/.local/share/zinit/zinit.git`). The main configuration loads it for completions, syntax highlighting, autosuggestions, and fzf-tab; shell startup never performs a network checkout. Starship provides the prompt and is configured in `starship/starship.toml`.
 
 `~/.zshrc-paths` sets the repository locations and adds `~/scripts` to `PATH`. `~/.shellrc-common` contains shared aliases and fzf helpers for both shells; the shell-specific alias files retain only shell-specific behavior. The `ff`, `fdc`, `gf`, `gv`, `gb`, `gt`, and `gl` helpers use fzf; previews use `bat` when available and fall back to `sed` (`batcat` is supported on Ubuntu). `~/scripts/fzf-git` remains as a compatibility loader for older configurations.
 

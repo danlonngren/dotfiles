@@ -1,6 +1,11 @@
 # Core command-line tools used by this configuration.
 cask "font-jetbrains-mono-nerd-font"
 
+# Shells and prompts
+#brew "ghostty"
+brew "starship"
+
+# Tools
 brew "bat"
 brew "fd"
 brew "htop"
@@ -23,7 +28,6 @@ brew "zsh-autosuggestions"
 brew "zsh-syntax-highlighting"
 brew "zoxide"
 brew "zsh"
-brew "pure"
 
 # Development
 brew "cmake"
