@@ -1,5 +1,5 @@
 COMMON_FILES := shell/.shellrc-common
-BASH_FILES := $(COMMON_FILES) bash/.bashrc bash/.bashrc-aliases install.sh scripts/fzf-git scripts/install-ubuntu-dependencies scripts/newpyscript scripts/newscript scripts/path
+BASH_FILES := $(COMMON_FILES) bash/.bashrc bash/.bashrc-aliases install.sh scripts/fzf-git scripts/install-ubuntu-dependencies scripts/newpyscript scripts/newscript scripts/path scripts/ssh-tail
 ZSH_FILES := $(COMMON_FILES) zsh/.zshrc zsh/.zshrc-aliases zsh/.zshrc-paths scripts/logview
 
 .PHONY: check syntax

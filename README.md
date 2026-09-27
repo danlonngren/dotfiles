@@ -10,7 +10,7 @@ Clone the repository, then run:
 ./install.sh
 ```
 
-The installer creates symlinks for `~/.zshrc`, `~/.zshrc-paths`, `~/.zshrc-aliases`, `~/.bashrc`, `~/.shellrc-common`, `~/.git_aliases`, `~/.config/starship.toml`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
+The installer creates symlinks for `~/.zshrc`, `~/.bashrc`, `~/.shellrc_common`, `~/.config/starship.toml`, `~/.config/tmux/tmux.conf`, `~/.config/nvim`, `~/scripts`, and every tmuxinator project in `tmuxinator/`. It does not overwrite an existing non-symlink path; move or back up a conflicting path first. It also installs the platform's command-line dependencies.
 
 ### Dependencies
 
@@ -74,4 +74,10 @@ The Python LSP definition is in `nvim/lsp/basedpyright.lua`.
 
 ## Scripts
 
-The installed `~/scripts` directory contains `fzf-git` (Git pickers), `logview` (browse, regex-search, or follow a log), `newscript`, `newpyscript`, and `path`. `logview` copies the selected line with Enter when `pbcopy`, `wl-copy`, or `xclip` is available.
+The installed `~/scripts` directory contains `fzf-git` (Git pickers), `logview` (browse, regex-search, or follow a log), `newscript`, `newpyscript`, `path`, and `ssh-tail`. `ssh-tail` follows a remote log over SSH:
+
+```sh
+ssh-tail -n 200 user@example.com /var/log/application.log
+```
+
+`logview` copies the selected line with Enter when `pbcopy`, `wl-copy`, or `xclip` is available.

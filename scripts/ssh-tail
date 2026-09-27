@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+    echo "Usage: ssh-tail [-n lines] <user@host> <remote-file>" >&2
+    exit 2
+}
+
+shell_quote() {
+    local value=$1
+    printf "'%s'" "${value//\'/\'\"\'\"\'}"
+}
+
+lines=100
+
+while getopts ':n:h' option; do
+    case "$option" in
+        n) lines=$OPTARG ;;
+        h) usage ;;
+        *) usage ;;
+    esac
+done
+shift "$((OPTIND - 1))"
+
+[[ $lines =~ ^[0-9]+$ ]] || {
+    echo "Error: lines must be a non-negative integer." >&2
+    exit 2
+}
+
+[[ $# -eq 2 ]] || usage
+
+target=$1
+remote_file=$2
+
+exec ssh "$target" "tail -n $lines -F -- $(shell_quote "$remote_file")"
