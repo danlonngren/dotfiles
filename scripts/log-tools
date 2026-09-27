@@ -1,0 +1,520 @@
+#!/usr/bin/env python3
+r"""Unix-style tools for parsing and working with structured logs.
+
+Examples:
+  cat test.log | python3 log-tools.py parse --regex '^(?P<time>\S+) !(?P<level>\w+) (?P<message>.*)$'
+  cat app.jsonl | python3 log-tools.py filter --where level=ERROR
+  python3 log-tools.py merge first.jsonl second.jsonl --sort-by timestamp
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import heapq
+import json
+import os
+import re
+import sys
+from collections import Counter, OrderedDict
+from itertools import chain
+from pathlib import Path
+from typing import Any, Iterable, Iterator, TextIO
+
+FORMATS = ("json", "jsonl", "csv")
+
+
+def add_format_argument(parser: argparse.ArgumentParser, default: str) -> None:
+    parser.add_argument(
+        "--format",
+        choices=FORMATS,
+        default=default,
+        help=f"Output format (default: {default})",
+    )
+
+
+def split_condition(value: str) -> tuple[str, str]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("conditions must use FIELD=VALUE")
+    field, expected = value.split("=", 1)
+    if not field:
+        raise argparse.ArgumentTypeError("condition field cannot be empty")
+    return field, expected
+
+
+def arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Parse, filter, summarise, merge, and split logs."
+    )
+    commands = parser.add_subparsers(
+        dest="command", 
+        required=True
+    )
+
+    ################################################
+    # Parser
+    ################################################
+    parse = commands.add_parser(
+        "parse", 
+        help="Parse raw stdin log lines with a named-capture regex"
+    )
+    parse.add_argument(
+        "--regex",
+        help="Named-capture regex; takes precedence over --regex-file and LOG_REGEX",
+    )
+    parse.add_argument(
+        "--regex-file", type=Path, help="File containing a named-capture regex"
+    )
+    add_format_argument(parse, "jsonl")
+
+    ################################################
+    # Stats
+    ################################################
+    stats = commands.add_parser(
+        "stats", help="Summarise JSON or JSONL records from stdin"
+    )
+    stats.add_argument(
+        "--group-by",
+        action="append",
+        default=[],
+        help="Field to count; may be repeated",
+    )
+    stats.add_argument(
+        "--top", type=int, default=10, help="Values shown per group (default: 10)"
+    )
+    stats.add_argument(
+        "--no-unique",
+        action="store_true",
+        help="Avoid storing unique values; use for high-cardinality fields",
+    )
+
+    ################################################
+    # Filter
+    ################################################
+    filtr = commands.add_parser(
+        "filter", help="Filter JSON or JSONL records from stdin"
+    )
+    filtr.add_argument(
+        "--where",
+        action="append",
+        type=split_condition,
+        default=[],
+        metavar="FIELD=VALUE",
+        help="Exact field match; repeat for AND matching",
+    )
+    filtr.add_argument(
+        "--match",
+        action="append",
+        type=split_condition,
+        default=[],
+        metavar="FIELD=REGEX",
+        help="Regex field match; repeat for AND matching",
+    )
+    filtr.add_argument(
+        "--time-field",
+        default="timestamp",
+        help="Field used by --from/--to (default: timestamp)",
+    )
+    filtr.add_argument(
+        "--from", 
+        dest="time_from", 
+        help="Inclusive lower time bound"
+    )
+    filtr.add_argument(
+        "--to", 
+        dest="time_to", 
+        help="Inclusive upper time bound"
+    )
+    add_format_argument(filtr, "jsonl")
+
+    ################################################
+    # Merger
+    ################################################
+    merge = commands.add_parser(
+        "merge", 
+        help="Merge JSON/JSONL files or stdin by a field"
+    )
+    merge.add_argument(
+        "inputs", 
+        nargs="+", 
+        type=Path, 
+        help="Input JSON/JSONL files; use - for stdin"
+    )
+    merge.add_argument(
+        "--sort-by", 
+        required=True, 
+        help="Field used to order records"
+    )
+    merge.add_argument(
+        "--assume-sorted",
+        action="store_true",
+        help="Stream-merge already sorted inputs using little memory",
+    )
+    add_format_argument(merge, "jsonl")
+
+    ################################################
+    # Splitter
+    ################################################
+    splitter = commands.add_parser(
+        "split", 
+        help="Split JSON/JSONL stdin records into JSONL files by a field"
+    )
+    splitter.add_argument(
+        "--by", 
+        required=True, 
+        help="Field used to choose each output file"
+    )
+    splitter.add_argument(
+        "--output-dir",
+        required=True,
+        type=Path,
+        help="Directory to write the split JSONL files",
+    )
+    splitter.add_argument(
+        "--max-open-files",
+        type=int,
+        default=64,
+        help="Open output-file cache size (default: 64)",
+    )
+
+    return parser.parse_args()
+
+
+################################################
+# Common helpers
+################################################
+def read_structured(source: TextIO, label: str) -> Iterator[dict[str, Any]]:
+    """Read JSONL incrementally; JSON arrays remain supported but use memory."""
+    first = source.readline()
+    while first and not first.strip():
+        first = source.readline()
+    if not first:
+        return
+    if first.lstrip().startswith("["):
+        try:
+            items = json.loads(first + source.read())
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{label}: invalid JSON: {error}") from error
+        if not isinstance(items, list):
+            raise ValueError(f"{label}: expected a JSON array")
+        lines: Iterable[Any] = items
+    else:
+        lines = chain((first,), source)
+    for entry in lines:
+        if isinstance(entry, str) and not entry.strip():
+            continue
+        try:
+            item = entry if isinstance(entry, dict) else json.loads(entry)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{label}: invalid JSONL: {error}") from error
+        if not isinstance(item, dict):
+            raise ValueError(f"{label}: every record must be a JSON object")
+        yield item
+
+
+def write_records(
+    items: Iterable[dict[str, Any]],
+    output_format: str,
+    destination: TextIO = sys.stdout,
+    csv_fields: list[str] | None = None,
+) -> None:
+    if output_format == "json":
+        destination.write("[\n")
+        first = True
+        for item in items:
+            if not first:
+                destination.write(",\n")
+            json.dump(item, destination, ensure_ascii=False)
+            first = False
+        destination.write("\n]\n")
+    elif output_format == "jsonl":
+        for item in items:
+            destination.write(json.dumps(item, ensure_ascii=False) + "\n")
+    else:
+        if csv_fields is None:
+            items = list(items)
+            csv_fields = list(dict.fromkeys(name for item in items for name in item))
+        writer = csv.DictWriter(destination, fieldnames=csv_fields)
+        writer.writeheader()
+        writer.writerows(items)
+
+################################################
+# Log Parser
+################################################
+def command_parse(args: argparse.Namespace) -> int:
+    try:
+        file_regex = (
+            args.regex_file.read_text(encoding="utf-8").strip()
+            if args.regex_file
+            else None
+        )
+
+    except OSError as error:
+        print(f"Cannot read regex file: {error}", file=sys.stderr)
+        return 2
+
+    regex = args.regex or file_regex or os.getenv("LOG_REGEX")
+    if not regex:
+        print("Provide parse --regex, --regex-file, or set LOG_REGEX.", file=sys.stderr)
+        return 2
+
+    try:
+        pattern = re.compile(regex)
+    except re.error as error:
+        print(f"Invalid regex: {error}", file=sys.stderr)
+        return 2
+
+    if not pattern.groupindex:
+        print(
+            "The regex must contain named captures, e.g. (?P<level>INFO).",
+            file=sys.stderr,
+        )
+        return 2
+
+    # groupdict preserves the named-capture order specified by the expression.
+    write_records(
+        (match.groupdict() for line in sys.stdin if (match := pattern.search(line))),
+        args.format,
+        csv_fields=list(pattern.groupindex),
+    )
+
+    return 0
+
+################################################
+# Log Stats
+################################################
+def command_stats(args: argparse.Namespace) -> int:
+    if args.top < 1:
+        print("--top must be at least 1.", file=sys.stderr)
+        return 2
+
+    try:
+        items = read_structured(sys.stdin, "standard input")
+        total = 0
+        field_summary: dict[str, dict[str, Any]] = {}
+        group_counts = {field: Counter() for field in args.group_by}
+
+        for item in items:
+            total += 1
+            for field, value in item.items():
+                summary = field_summary.setdefault(
+                    field,
+                    {"present": 0, "unique_values": None if args.no_unique else set()},
+                )
+
+                if value is not None:
+                    summary["present"] += 1
+                    if summary["unique_values"] is not None:
+                        summary["unique_values"].add(json.dumps(value, sort_keys=True))
+
+            for field, counts in group_counts.items():
+                counts[str(item.get(field, "<missing>"))] += 1
+
+    except (json.JSONDecodeError, ValueError) as error:
+        print(f"Invalid input: {error}", file=sys.stderr)
+        return 2
+
+    field_summary = {
+        field: {
+            "present": summary["present"],
+            "missing": total - summary["present"],
+            "unique": (
+                None
+                if summary["unique_values"] is None
+                else len(summary["unique_values"])
+            ),
+        }
+        for field, summary in field_summary.items()
+    }
+
+    groups = {
+        field: [
+            {"value": value, "count": count}
+            for value, count in counts.most_common(args.top)
+        ]
+        for field, counts in group_counts.items()
+    }
+
+    json.dump(
+        {"records": total, "fields": field_summary, "groups": groups},
+        sys.stdout,
+        indent=2,
+    )
+
+    sys.stdout.write("\n")
+    return 0
+
+################################################
+# Log Filter
+################################################
+def command_filter(args: argparse.Namespace) -> int:
+    if args.time_from and args.time_to and args.time_from > args.time_to:
+        print("--from must be earlier than or equal to --to.", file=sys.stderr)
+        return 2
+
+    try:
+        matchers = [(field, re.compile(expression)) for field, expression in args.match]
+        items = read_structured(sys.stdin, "standard input")
+
+    except (re.error, json.JSONDecodeError, ValueError) as error:
+        print(f"Invalid input or regex: {error}", file=sys.stderr)
+        return 2
+
+    selected = (
+        item
+        for item in items
+        if all(str(item.get(field, "")) == value for field, value in args.where)
+        and all(
+            expression.search(str(item.get(field, "")))
+            for field, expression in matchers
+        )
+        and (
+            args.time_from is None
+            or str(item.get(args.time_field, "")) >= args.time_from
+        )
+        and (args.time_to is None or str(item.get(args.time_field, "")) <= args.time_to)
+    )
+
+    write_records(selected, args.format)
+
+    return 0
+
+################################################
+# Log Merger
+################################################
+def command_merge(args: argparse.Namespace) -> int:
+    if sum(path == Path("-") for path in args.inputs) > 1:
+        print("Standard input (-) may only be used once.", file=sys.stderr)
+        return 2
+
+    if args.assume_sorted:
+        handles: list[TextIO] = []
+        try:
+            streams: list[Iterator[dict[str, Any]]] = []
+            for path in args.inputs:
+                if path == Path("-"):
+                    streams.append(read_structured(sys.stdin, "standard input"))
+                else:
+                    handle = path.open(encoding="utf-8")
+                    handles.append(handle)
+                    streams.append(read_structured(handle, str(path)))
+            heap: list[tuple[str, int, dict[str, Any], Iterator[dict[str, Any]]]] = []
+            for position, stream in enumerate(streams):
+                item = next(stream, None)
+
+                if item is not None:
+                    if args.sort_by not in item:
+                        raise ValueError(f"every record must contain '{args.sort_by}'")
+                    heapq.heappush(
+                        heap, (str(item[args.sort_by]), position, item, stream)
+                    )
+
+            def ordered_stream() -> Iterator[dict[str, Any]]:
+                while heap:
+                    _, position, item, stream = heapq.heappop(heap)
+                    yield item
+                    following = next(stream, None)
+                    if following is not None:
+                        if args.sort_by not in following:
+                            raise ValueError(
+                                f"every record must contain '{args.sort_by}'"
+                            )
+                        heapq.heappush(
+                            heap,
+                            (str(following[args.sort_by]), position, following, stream),
+                        )
+
+            write_records(ordered_stream(), args.format)
+            return 0
+
+        except (OSError, ValueError) as error:
+            print(f"Cannot merge logs: {error}", file=sys.stderr)
+            return 2
+
+        finally:
+            for handle in handles:
+                handle.close()
+
+    try:
+        items: list[dict[str, Any]] = []
+        for path in args.inputs:
+            if path == Path("-"):
+                items.extend(read_structured(sys.stdin, "standard input"))
+            else:
+                with path.open(encoding="utf-8") as source:
+                    items.extend(read_structured(source, str(path)))
+
+        if any(args.sort_by not in item for item in items):
+            raise ValueError(f"every record must contain '{args.sort_by}'")
+
+    except (OSError, ValueError) as error:
+        print(f"Cannot merge logs: {error}", file=sys.stderr)
+        return 2
+
+    ordered = [
+        item
+        for _, item in sorted(
+            enumerate(items), key=lambda pair: (str(pair[1][args.sort_by]), pair[0])
+        )
+    ]
+
+    write_records(ordered, args.format)
+
+    return 0
+
+
+################################################
+# Log Splitter
+################################################
+def split_filename(value: Any) -> str:
+    text = str(value) if value is not None else "missing"
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._") or "empty"
+    return f"{safe[:120]}.jsonl"
+
+def command_split(args: argparse.Namespace) -> int:
+    if args.max_open_files < 1:
+        print("--max-open-files must be at least 1.", file=sys.stderr)
+        return 2
+
+    handles: OrderedDict[Path, TextIO] = OrderedDict()
+
+    try:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        for item in read_structured(sys.stdin, "standard input"):
+            path = args.output_dir / split_filename(item.get(args.by))
+            destination = handles.pop(path, None)
+            if destination is None:
+                if len(handles) == args.max_open_files:
+                    _, oldest = handles.popitem(last=False)
+                    oldest.close()
+                destination = path.open("a", encoding="utf-8")
+            handles[path] = destination
+            destination.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"Cannot split logs: {error}", file=sys.stderr)
+        return 2
+
+    finally:
+        for destination in handles.values():
+            destination.close()
+
+    return 0
+
+################################################
+# Main
+################################################
+def main() -> int:
+    args = arguments()
+
+    return {
+        "parse": command_parse,
+        "stats": command_stats,
+        "filter": command_filter,
+        "merge": command_merge,
+        "split": command_split,
+    }[args.command](args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
