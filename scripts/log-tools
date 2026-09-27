@@ -66,6 +66,21 @@ def arguments() -> argparse.Namespace:
         "--regex-file", type=Path, help="File containing a named-capture regex"
     )
     add_format_argument(parse, "jsonl")
+    parse.add_argument(
+        "--split-by",
+        help="Write parsed records to JSONL files by this captured field",
+    )
+    parse.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory for --split-by output files",
+    )
+    parse.add_argument(
+        "--max-open-files",
+        type=int,
+        default=64,
+        help="Open output-file cache size for --split-by (default: 64)",
+    )
 
     ################################################
     # Stats
@@ -242,6 +257,13 @@ def write_records(
 # Log Parser
 ################################################
 def command_parse(args: argparse.Namespace) -> int:
+    if args.split_by and args.output_dir is None:
+        print("parse --split-by requires --output-dir.", file=sys.stderr)
+        return 2
+    if args.split_by and args.format != "jsonl":
+        print("parse --split-by only supports --format jsonl.", file=sys.stderr)
+        return 2
+
     try:
         file_regex = (
             args.regex_file.read_text(encoding="utf-8").strip()
@@ -271,12 +293,16 @@ def command_parse(args: argparse.Namespace) -> int:
         )
         return 2
 
-    # groupdict preserves the named-capture order specified by the expression.
-    write_records(
-        (match.groupdict() for line in sys.stdin if (match := pattern.search(line))),
-        args.format,
-        csv_fields=list(pattern.groupindex),
+    records = (
+        match.groupdict() for line in sys.stdin if (match := pattern.search(line))
     )
+    if args.split_by:
+        return write_split_records(
+            records, args.split_by, args.output_dir, args.max_open_files
+        )
+
+    # groupdict preserves the named-capture order specified by the expression.
+    write_records(records, args.format, csv_fields=list(pattern.groupindex))
 
     return 0
 
@@ -471,20 +497,22 @@ def split_filename(value: Any) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._") or "empty"
     return f"{safe[:120]}.jsonl"
 
-def command_split(args: argparse.Namespace) -> int:
-    if args.max_open_files < 1:
+def write_split_records(
+    items: Iterable[dict[str, Any]], by: str, output_dir: Path, max_open_files: int
+) -> int:
+    if max_open_files < 1:
         print("--max-open-files must be at least 1.", file=sys.stderr)
         return 2
 
     handles: OrderedDict[Path, TextIO] = OrderedDict()
 
     try:
-        args.output_dir.mkdir(parents=True, exist_ok=True)
-        for item in read_structured(sys.stdin, "standard input"):
-            path = args.output_dir / split_filename(item.get(args.by))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for item in items:
+            path = output_dir / split_filename(item.get(by))
             destination = handles.pop(path, None)
             if destination is None:
-                if len(handles) == args.max_open_files:
+                if len(handles) == max_open_files:
                     _, oldest = handles.popitem(last=False)
                     oldest.close()
                 destination = path.open("a", encoding="utf-8")
@@ -500,6 +528,15 @@ def command_split(args: argparse.Namespace) -> int:
             destination.close()
 
     return 0
+
+
+def command_split(args: argparse.Namespace) -> int:
+    return write_split_records(
+        read_structured(sys.stdin, "standard input"),
+        args.by,
+        args.output_dir,
+        args.max_open_files,
+    )
 
 ################################################
 # Main
